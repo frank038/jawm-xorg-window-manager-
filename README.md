@@ -1,4 +1,4 @@
-Jawm
+Jawm - a python3+xlib window manager
 
 Free to use and modify.
 
