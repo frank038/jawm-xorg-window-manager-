@@ -1,10 +1,10 @@
-Jawm - a python3+xlib window manager
+Jawm - a python3+xlib stacking window manager
 
 Free to use and modify.
 
 Limitations:
 - no multimonitor support;
 - no virtual desktops support;
-- other.
+- other missing features.
 
 Early release, but usable.
