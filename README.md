@@ -16,7 +16,7 @@ Some options can be changed in the beginning of the file jawm.py.
 What is supported:
 - titlebar (the decoration can be turned off/on as static option)
 - titlebar buttons: close, maximize and minimize
-- keyboard actions, using the Super_L key (left win key):
+- keyboard actions, using the mandatory Super_L key (left win key):
   - close the active window: c
   - move the window: m
   - minimize the window: n
