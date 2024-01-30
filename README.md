@@ -37,6 +37,6 @@ Limitations:
 Early release, but usable. Tint2 can be used with this wm.
 
 Known issues:
-- browsers in fullscreen mode
-- a little low performance while resizing (due to expose event and buttons)
+- firefox in fullscreen mode
+- a little lower performance while resizing (due to expose event and buttons)
 
