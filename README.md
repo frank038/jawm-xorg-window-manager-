@@ -7,6 +7,7 @@ Requirements:
 - xlib
 - ewmh
 - PIL
+- pidof or pgrep
 
 Execute this program using the script: jawm.sh
 
@@ -23,6 +24,7 @@ What is supported:
   - execute xterm: x
   - custom actions: 1 and 2 and 3 and 4 (actually empty)
   - left mouse button: move the window
+- window resizing (bottom-right only)
 - sloppy focus (if enabled)
 - colors and borders and titlebar size
 
