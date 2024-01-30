@@ -9,7 +9,7 @@ Requirements:
 - PIL
 - pidof or pgrep
 
-Execute this program using the script: jawm.sh
+Execute this program using the script: jawm.sh (which can also be used for environment settings and for launching other programs before this wm)
 
 Some options can be changed in the beginning of the file jawm.py.
 
