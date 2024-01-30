@@ -14,7 +14,7 @@ Execute this program using the script: jawm.sh (which can also be used for envir
 Some options can be changed in the beginning of the file jawm.py.
 
 What is supported:
-- titlebar (can be turned off/on as static option)
+- titlebar (the decoration can be turned off/on as static option)
 - titlebar buttons: close, maximize and minimize
 - keyboard actions, using the Super_L key (left win key):
   - close the active window: c
