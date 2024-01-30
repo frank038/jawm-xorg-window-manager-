@@ -21,7 +21,7 @@ What is supported:
   - move the window: m
   - minimize the window: n
   - exit from this wm: e
-  - execute xterm (or other terminal o program, as option): x
+  - execute xterm (or other terminal o program, as custom action): x
   - custom actions: 1 and 2 and 3 and 4 (actually empty)
   - left mouse button: move the window
 - window resizing (bottom-right only)
