@@ -23,6 +23,8 @@ What is supported:
   - execute xterm: x
   - custom actions: 1 and 2 and 3 and 4 (actually empty)
   - left mouse button: move the window
+- sloppy focus (if enabled)
+- colors and borders and titlebar size
 
 Limitations:
 - no multimonitor support;
