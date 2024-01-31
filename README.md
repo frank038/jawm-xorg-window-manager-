@@ -25,8 +25,8 @@ What is supported:
 - custom keyboard actions, using the mandatory Super_L key (left win key):
   - execute xterm (or other terminal o program): x
   - custom actions: 1 and 2 and 3 and 4 (actually empty)
-- window resizing (bottom-right only)
-- sloppy focus (as option, if enabled)
+- window resizing (bottom-right only with mouse; win key + w (up) s (bottom) a (left) d (right) without mouse)
+- sloppy focus
 - colors and borders and titlebar size (as options)
 
 Limitations:
@@ -37,6 +37,6 @@ Limitations:
 Early release, but usable. Tint2 can be used with this wm.
 
 Known issues:
-- firefox in fullscreen mode
+- firefox: fullscreen mode doesn't work properly (I have no idea)
 - a little lower performance while resizing (due to expose event and buttons)
 
