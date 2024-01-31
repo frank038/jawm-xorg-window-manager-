@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# custom commands
+
 # 
 thisdir=$(dirname "$0")
 cd $thisdir
