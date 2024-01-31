@@ -39,5 +39,6 @@ Early release, but usable. Tint2 can be used with this wm.
 
 Known issues:
 - firefox: fullscreen mode doesn't work properly (I have no idea)
+- gimp: the choose fore/background colors dialog doesn't close properly: only unmapped; it cannot be reopened (I have no idea)
 - a little lower performance while resizing (due to expose event and buttons)
 
