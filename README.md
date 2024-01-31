@@ -22,10 +22,11 @@ What is supported:
   - minimize the window: n
   - exit from this wm: e
   - left mouse button: move the window
+  - resize: w (up) s (bottom) a (left) d (right)
 - custom keyboard actions, using the mandatory Super_L key (left win key):
   - execute xterm (or other terminal o program): x
   - custom actions: 1 and 2 and 3 and 4 (actually empty)
-- window resizing (bottom-right only with mouse; win key + w (up) s (bottom) a (left) d (right) without mouse)
+- window resizing (bottom-right only with mouse)
 - sloppy focus
 - colors and borders and titlebar size (as options)
 
