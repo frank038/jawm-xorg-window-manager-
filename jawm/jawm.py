@@ -1358,11 +1358,12 @@ class x_wm:
                         # 0 remove
                         elif data[0] == 0:
                             self.maximize_window(event.window)
-                    # 331 _NET_WM_STATE
-                    # minimize 336 _NET_WM_STATE_HIDDEN
+                    # 
                     elif fmt == 32 and data[1] == self.WM_HIDDEN:
                         #
                         if data[0] == 2:
+                            self.minimize_window(event.window, data[0])
+                        elif data[0] == 0:
                             self.minimize_window(event.window, data[0])
                     # fullscreen
                     if fmt == 32 and data[1] == self.WM_FULLSCREEN:
