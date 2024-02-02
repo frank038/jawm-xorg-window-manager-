@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# v. 20240201
+# v. 20240202
 
 ##############
 ##### OPTIONS
@@ -41,13 +41,13 @@ _EXIT = "e"
 _TERMINAL = "xterm"
 
 # command 1 - key 1
-COMM_1 = "qterminal"
+COMM_1 = ""
 
 # command 2 - key 2
-COMM_2 = "file-roller"
+COMM_2 = ""
 
 # command 3 - key 3
-COMM_3 = "yad-icon-browser"
+COMM_3 = ""
 
 # command 4 - key 4
 COMM_4 = "tint2"
@@ -95,8 +95,6 @@ import signal
 #import threading
 #import time
 from PIL import Image
-from ewmh import EWMH
-ewmh = EWMH()
 
 
 # randr extension
@@ -203,7 +201,6 @@ except:
     _THIS_PID = 0
 
 
-
 def signal_catch(signal, frame):
     _is_running = 0
     Display().close()
@@ -258,8 +255,10 @@ class x_wm:
         #
         self.root.change_attributes(event_mask=mask)
         #
+        # Super_L Alt_l Control_l
         self.root.grab_key(self.display.keysym_to_keycode(XK.string_to_keysym(_STATE)),
             X.AnyModifier, 1, X.GrabModeAsync, X.GrabModeAsync)
+        #
         # windows with decoration: window:decoration
         self.DECO_WIN = {}
         # all managed windows
@@ -318,13 +317,17 @@ class x_wm:
         self._wm_support()
         #
         self.display.flush()
+        #
         # decoration buttons
         if NO_DECO == 0:
             self.deco_btn_width = 0
             self.deco_btn_height = 0
             self.on_deco_btn()
         #
+        # self.on_start()
+        #
         self.main_loop()
+    
     
     #
     def _root_change_property(self, _type, _data):
@@ -347,7 +350,7 @@ class x_wm:
             self.display.get_atom('_NET_WM_NAME'),
             self.display.intern_atom('UTF8_STRING'),
             8,'jawm'.encode())
-        #
+        # cmd, cls
         self._window.set_wm_class('jawm', 'JAWM')
         #
         if _THIS_PID:
@@ -359,9 +362,8 @@ class x_wm:
         self._window.set_selection_owner(self.WM_S, X.CurrentTime)
         #
         if _is_randr == 1:
-            # Enable all RandR events.
             self._window.xrandr_select_input(randr.RRScreenChangeNotifyMask)
-    
+
    
     # add a decoration to win
     def win_deco(self, win):
@@ -389,16 +391,23 @@ class x_wm:
         deco.change_attributes(border_pixel=border_color1, border_width=BORDER_WIDTH2)
         deco.configure(border_width=BORDER_WIDTH2)
         #
+        # deco.grab_button(1, X.NONE, True,
+                 # X.ButtonPressMask|X.ButtonReleaseMask, X.GrabModeAsync,
+                 # X.GrabModeAsync, X.NONE, X.NONE)
+        #
         deco.change_attributes(event_mask=mask_deco)
         self.display.sync()
+        #
         # wret = 0
         # def werror(err, ww):
             # wret = -1
         #
         # win.reparent(deco, BORDER_WIDTH, TITLE_HEIGHT, onerror=werror)
+        #
         return deco
     
     def on_deco_btn(self):
+        # close
         im = Image.open('icons/close40x28.png').convert('RGB')
         # im = im.resize((40,28))
         iw, ih = im.size
@@ -487,7 +496,11 @@ class x_wm:
                     #
                     if not win:
                         continue
-                #
+                # skip if already present
+                if event.window in self.all_windows:
+                    continue
+                if event.window in self.all_windows_stack:
+                    continue
                 # docks
                 if event.window in self.dock_windows:
                     continue
@@ -498,9 +511,6 @@ class x_wm:
                 w_is_transient = event.window.get_full_property(self.display.get_atom("WM_TRANSIENT_FOR"), X.AnyPropertyType)
                 if w_is_transient:
                     continue
-                # only managed window - no splash no notification
-                if event.window not in self.all_windows:
-                    continue
                 # window inside the decoration or window (without decoration)
                 if event.window in self.DECO_WIN:
                     wwin = event.window
@@ -509,7 +519,6 @@ class x_wm:
                     if self.active_window:
                         # the old active window
                         if self.active_window != wwin:
-                            # grab LMB - will be the old active window
                             self.active_window.grab_button(1, X.AnyModifier, True,
                                 X.ButtonPressMask|X.ButtonReleaseMask, X.GrabModeAsync,
                                 X.GrabModeAsync, X.NONE, X.NONE)
@@ -521,7 +530,7 @@ class x_wm:
                             # its transient
                             if self.active_window in self.transient_windows:
                                 self.transient_windows[self.active_window].change_attributes(border_pixel=border_color2)
-                            #
+                            # the new active window
                             self.active_window = wwin
                     else:
                         # the new active window
@@ -532,12 +541,19 @@ class x_wm:
                         else:
                             self.active_window.change_attributes(border_pixel=border_color1)
                     #
+                    self.all_windows.append(wwin)
+                    self.all_windows_stack.append(wwin)
+                    self._update_client_list()
+                    self._update_client_list_stack()
+                    #
                     self.active_window.set_input_focus(X.RevertToPointerRoot, X.CurrentTime)
                     self.active_window.raise_window()
                     self.display.sync()
                     #
+                    # self.display.flush()
+                    #
                     self._update_active_window(self.active_window)
-                #
+                    #
             #
             elif event.type == X.MapRequest:
                 if event.window == X.NONE or event.window == None:
@@ -566,11 +582,13 @@ class x_wm:
                     continue
                 #
                 ew_type = None
-                try:
-                    ew_type = ewmh.getWmWindowType(event.window, str=True)
-                except Exception as E:
-                    print("ew_type error:", str(E))
-                # 
+                #
+                ew_type_tmp = self.get_window_type(event.window)
+                ew_type = []
+                if ew_type_tmp != 1:
+                    for ee in ew_type_tmp:
+                        ew_type.append(self.display.get_atom_name(ee))
+                #
                 if ew_type:
                     if ew_type[0] in WINDOW_WITH_NO_DECO:
                         continue
@@ -586,6 +604,7 @@ class x_wm:
                             global DOCK_HEIGHT_B
                             # _NET_WM_STRUT, left, right, top, bottom, CARDINAL[4]/32
                             result2 = self.getProp(event.window, 'STRUT')
+                            #
                             if result2:
                                 # 0 0 38 0
                                 DOCK_HEIGHT_X = result2[0]
@@ -598,8 +617,8 @@ class x_wm:
                                 # right_start_y, right_end_y, top_start_x, top_end_x, bottom_start_x,
                                 # bottom_end_x,CARDINAL[12]/32
                                 result1 = self.getProp(event.window, 'STRUT_PARTIAL')
+                                #
                                 if result1:
-                                    # 0 0 38 0 0 0 0 0 0 1599 0 0
                                     DOCK_HEIGHT_X = result2[0]
                                     DOCK_HEIGHT_Y = result2[1]
                                     DOCK_HEIGHT_T = result2[2]
@@ -612,7 +631,7 @@ class x_wm:
                             self._update_client_list()
                             self.all_windows_stack.append(event.window)
                             self._update_client_list_stack()
-                        # desktop - TO DO
+                        # desktop
                         elif ew_type[0] == '_NET_WM_WINDOW_TYPE_DESKTOP':
                             if  self.desktop_window == []:
                                 self.desktop_window.append(event.window)
@@ -623,7 +642,7 @@ class x_wm:
                                 self.all_windows_stack.insert(0, event.window)
                                 self._update_client_list_stack()
                                 event.window.map()
-                        # notification - TO DO eg position
+                        #
                         elif ew_type[0] == '_NET_WM_WINDOW_TYPE_NOTIFICATION':
                             ngeom = event.window.get_geometry()
                             x = end_x - ngeom.width - 4
@@ -634,7 +653,7 @@ class x_wm:
                             event.window.configure(x=x, y=y)
                             self.display.sync()
                             event.window.map()
-                        # notification - TO DO eg position
+                        #
                         elif ew_type[0] == '_NET_WM_WINDOW_TYPE_SPLASH':
                             win_geom = event.window.get_geometry()
                             x = int((screen_width-win_geom.width)/2)
@@ -690,22 +709,17 @@ class x_wm:
                 #
                 # skip window that doesnt want the decoration
                 pprop = event.window.get_full_property(self.display.intern_atom('_MOTIF_WM_HINTS'), X.AnyPropertyType)
-                #
                 if pprop != None:
                     if pprop.value:
                         if pprop.value.tolist()[2] == 0:
                             # add the border
                             event.window.configure(border_width=BORDER_WIDTH2)
                             #
+                            # mask = X.EnterWindowMask | X.LeaveWindowMask
                             mask = X.EnterWindowMask|X.StructureNotifyMask
                             event.window.change_attributes(event_mask=mask)
                             #
                             self.DECO_WIN[event.window] = None
-                            #
-                            self.all_windows.append(event.window)
-                            self._update_client_list()
-                            self.all_windows_stack.append(event.window)
-                            self._update_client_list_stack()
                             #
                             event.window.map()
                             event.window.raise_window()
@@ -724,21 +738,18 @@ class x_wm:
                     #
                     if NO_DECO == 0:
                         self.deco_btn(deco)
-                    # self.display.sync()
-                #
-                self.all_windows.append(event.window)
-                self._update_client_list()
-                self.all_windows_stack.append(event.window)
-                self._update_client_list_stack()
                 #
                 event.window.raise_window()
                 event.window.map()
                 #
+                # mask = X.EnterWindowMask | X.LeaveWindowMask
                 mask = X.EnterWindowMask
                 event.window.change_attributes(event_mask=mask)
                 #
                 continue
                 #
+            # elif event.type == X.CreateNotify:
+                # pass
             #
             elif event.type == X.Expose:
                 if NO_DECO == 0:
@@ -756,7 +767,6 @@ class x_wm:
                 self.entered_window = event.window
                 #
                 if SLOPPY_FOCUS:
-                    # 
                     if event.window in self.DECO_WIN:
                         event.window.set_input_focus(X.RevertToParent, 0)
                     else:
@@ -765,7 +775,6 @@ class x_wm:
                                 event.window.set_input_focus(X.RevertToParent, 0)
                                 break
             #
-
             elif event.type == self.display.extension_event.ScreenChangeNotify:
                 screen_width = event.width_in_pixels
                 screen_height = event.height_in_pixels
@@ -808,7 +817,6 @@ class x_wm:
                 w_is_transient = None
                 for wwin in self.transient_windows:
                     if self.transient_windows[wwin] == event.window:
-                        #
                         wwin.set_input_focus(X.RevertToPointerRoot, X.CurrentTime)
                         wwin.raise_window()
                         self.display.sync()
@@ -896,8 +904,18 @@ class x_wm:
                             elif wwin:
                                 wwin.configure(width=ww, height=hh)
                     #
+                    # # left
+                            # ww = self.window_resize_geometry[2] + (x-self.mouse_button_resize_drag_start_point[0])
+                            # hh = self.window_resize_geometry[3] + (y-self.mouse_button_resize_drag_start_point[1])
+                            # #
+                            # # min size
+                            # if ww > 75 or hh > 75:
+                                # if deco:
+                                    # deco.configure(x=x-ww ,y=y+hh, width=ww, height=hh)
+                                    # # win.configure(width=ww-BORDER_WIDTH*2, height=hh-BORDER_WIDTH*2-TITLE_HEIGHT)
+                    #
                     continue
-                #### dragging 
+                #### dragging
                 if self.mouse_button_left and self.grabbed_window_btn1:
                     x = event.root_x
                     y = event.root_y
@@ -912,6 +930,13 @@ class x_wm:
                         wwin = self.find_win_of_deco(self.grabbed_window_btn1)
                         if wwin:
                             ddeco = self.grabbed_window_btn1
+                    #
+                    if wwin == None and ddeco == None:
+                        # transient
+                        for iitem in self.transient_windows:
+                            if self.transient_windows[iitem] == self.grabbed_window_btn1:
+                                wwin = self.grabbed_window_btn1
+                                break
                     #
                     if not self.delta_drag_start_point:
                         continue
@@ -1042,6 +1067,9 @@ class x_wm:
                         if COMM_4:
                             if shutil.which(COMM_4):
                                 subprocess.Popen([COMM_4])
+                    #
+                    # elif event.detail == self.display.keysym_to_keycode(XK.string_to_keysym("Tab")):
+                        # pass
             #
             elif event.type == X.KeyRelease:
                 # on root
@@ -1055,6 +1083,7 @@ class x_wm:
                         self.key_press_window.ungrab_button(3, X.AnyModifier)
             # 
             elif event.type == X.ButtonPress:
+                # child is the window or deco
                 _QP_DATA = self.root.query_pointer()
                 # could be root
                 if event.window == None or event.window == X.NONE:
@@ -1083,6 +1112,13 @@ class x_wm:
                             wwin = self.find_win_of_deco(pdatawin)
                             if wwin:
                                 ddeco = pdatawin
+                        #
+                        if wwin == None and ddeco == None:
+                            # transient
+                            for iitem in self.transient_windows:
+                                if self.transient_windows[iitem] == pdatawin:
+                                    wwin = pdatawin
+                                    break
                         #
                         if wwin:
                             self.grabbed_window_btn1 = wwin
@@ -1115,6 +1151,9 @@ class x_wm:
                         #
                         if not ddeco:
                             ddeco = wwin
+                        # it could be transient
+                        if not wwin:
+                            continue
                         dgeom = ddeco.get_geometry()
                         dpos = dgeom.root.translate_coords(ddeco.id, 0, 0)
                         dx = dpos.x
@@ -1136,11 +1175,15 @@ class x_wm:
                         self.window_resize_geometry = (dx, dy, dw, dh)
                         self.mouse_button_resize_drag_start_point = (ex, ey)
                         self.delta_drag_start_point = (ex - cx, ey - cy)
+                        #
                         continue
+                        
                 ##########
                 #
                 if event.detail == 1:
+                    #
                     # actions in releasebutton event
+                    #
                     if _QP_DATA.root == self.root:
                         pdatawin = _QP_DATA.child
                         wwin = None
@@ -1154,7 +1197,12 @@ class x_wm:
                                 ddeco = pdatawin
                                 wwin = decotemp
                         #
-                        if ddeco:
+                        _bring_to_front = 0
+                        # skip window at back
+                        if wwin != self.active_window:
+                            _bring_to_front = 1
+                        #
+                        if ddeco != None and _bring_to_front == 0:
                             dgeom = ddeco.get_geometry()
                             # decoration starting x and y without borders
                             dpos = dgeom.root.translate_coords(ddeco.id, 0, 0)
@@ -1174,7 +1222,6 @@ class x_wm:
                             # maximize button
                             elif (dx+dw-BORDER_WIDTH-self.deco_btn_width*2-BTN_SPACE) < ex < (dx+dw-BORDER_WIDTH-BTN_SPACE-self.deco_btn_width):
                                 if (dy+BORDER_WIDTH) < ey < (dy+BORDER_WIDTH+self.deco_btn_height):
-                                    # wwin = self.find_win_of_deco(ddeco)
                                     if wwin in self.DECO_WIN:
                                         continue
                             # minimize button
@@ -1212,27 +1259,26 @@ class x_wm:
                                 x = event.root_x
                                 y = event.root_y
                                 self.delta_drag_start_point = (x - cx, y - cy)
+                                #
                                 continue
                         #
-                        # TO DO
                         ################ window to front #############
-                        pdatawin = _QP_DATA.child
-                        wwin = None
-                        ddeco = None
-                        if pdatawin in self.DECO_WIN:
-                            wwin = pdatawin
-                            ddeco = self.DECO_WIN[pdatawin]
-                        else:
-                            decotemp = self.find_win_of_deco(pdatawin)
-                            if decotemp:
-                                ddeco = pdatawin
-                                wwin = decotemp
-                        #
-                        if ddeco:
-                            ddeco.raise_window()
-                        wwin.raise_window()
-                        #
-                        self._activate_window(wwin, ddeco, 0)
+                        if _bring_to_front == 1:
+                            #
+                            for iitem in self.transient_windows:
+                                if self.transient_windows[iitem] == pdatawin:
+                                    wwin = iitem
+                                    ddeco = self.DECO_WIN[iitem]
+                                    break
+                                #
+                            #
+                            if wwin:
+                                if ddeco:
+                                    ddeco.raise_window()
+                                #
+                                wwin.raise_window()
+                                #
+                                self._activate_window(wwin, ddeco, 0)
                         continue
             #
             elif event.type == X.ButtonRelease:
@@ -1297,6 +1343,7 @@ class x_wm:
                         self.grabbed_window_btn1.ungrab_button(3, X.AnyModifier)
                     #
                     self.grabbed_window_btn1 = None
+                    #
                     self.display.ungrab_pointer(X.CurrentTime)
                     continue
             #
@@ -1306,12 +1353,15 @@ class x_wm:
                 #
                 if event.atom == self.NET_ACTIVE_WINDOW:
                     print("ACTIVE WINDOW CHANGED")
+                    continue
                 #
                 elif event.atom == self.NET_LIST_STACK:
                     print("LIST STACK CHANGED")
+                    continue
                 #
                 elif event.atom == self.NET_LIST:
                     print("LIST CHANGED")
+                    continue
             #
             elif event.type == X.ClientMessage:
                 #
@@ -1363,13 +1413,13 @@ class x_wm:
                                 self.grabbed_window_btn1.ungrab_button(1, X.AnyModifier)
                                 #
                                 self.grabbed_window_btn1 = None
+                                #
                                 self.display.ungrab_pointer(X.CurrentTime)
                                 #
                     #
                     continue
                 #
                 if event.client_type == self.display.intern_atom("_NET_RESTACK_WINDOW"):
-                    print("** cl restack")
                     continue
                 #
                 if event.client_type == self.NET_ACTIVE_WINDOW:
@@ -1399,6 +1449,7 @@ class x_wm:
                     continue
                 #
                 if event.client_type == self.NET_WM_STATE:
+                    # 
                     fmt, data = event.data
                     # maximize
                     if fmt == 32 and data[1] == self.WM_MAXIMIZED_VERT and data[2] == self.WM_MAXIMIZED_HORZ:
@@ -1408,8 +1459,9 @@ class x_wm:
                         # 0 remove
                         elif data[0] == 0:
                             self.maximize_window(event.window)
-                    #
+                    # 
                     elif fmt == 32 and data[1] == self.WM_HIDDEN:
+                        #
                         if data[0] == 2:
                             self.minimize_window(event.window, data[0])
                             self._window.set_wm_state(Display().intern_atom('_NET_WM_STATE_SKIP_TASKBAR'))
@@ -1437,12 +1489,10 @@ class x_wm:
                         elif data[0] == 2:
                             hints = event.window.get_wm_hints() or { 'flags': 0 }
                             if hints['flags'] & Xutil.UrgencyHint:
-                                # rimuove
                                 hints['flags'] &= ~Xutil.UrgencyHint
                                 event.window.set_wm_hints(hints)
                                 self.display.flush()
                             else:
-                                # aggiunge
                                 hints = event.window.get_wm_hints() or { 'flags': 0 }
                                 hints['flags'] |= Xutil.UrgencyHint
                                 event.window.set_wm_hints(hints)
@@ -1462,23 +1512,34 @@ class x_wm:
                     #
                     continue
                 #
+                # Somebody wants to tell us something
                 if event.client_type == self.WM_PROTOCOLS:
                     fmt, data = event.data
                     if fmt == 32 and data[0] == self.WM_DELETE_WINDOW:
-                        # sys.exit(0)
                         if event.window in self.DECO_WIN:
                             self.close_window(event.window)
                     #
                     continue
                 #
                 if event.client_type == self.display.intern_atom("MANAGER"):
-                    #
+                    # num WM_S0 num 0 0
                     fmt, data = event.data
                     if fmt == 32:
                         if data[1] == self.WM_S:
+                            # if self.display.get_selection_owner(self.WM_S) == 0:
+                                # self._window.set_selection_owner(X.NONE, X.CurrentTime)
+                                # for ww in [self.root, self._window]:
+                                    # ww.change_property(self.display.get_atom('_NET_SUPPORTING_WM_CHECK'),
+                                        # Xatom.WINDOW,32,[X.NONE])
+                                # # #
+                                # # self._window.destroy()
+                                # # os.kill(_THIS_PID, 9)
+                                # return
+                            #
                             continue
             #
             elif event.type == X.ConfigureRequest:
+                ######################
                 window = event.window
                 x, y = event.x, event.y
                 width, height = event.width, event.height
@@ -1505,7 +1566,7 @@ class x_wm:
                     if width == screen_width and height == screen_height:
                         if self.window_in_fullscreen_state_CM:
                             continue
-                        # skip unwanted request - mpv hack?
+                        # skip unwanted request - mpv
                         if self.window_in_fullscreen_state:
                             if event.window == self.window_in_fullscreen_state[0]:
                                 continue
@@ -1528,11 +1589,9 @@ class x_wm:
                                 #
                                 continue
             #
-            # if not _is_running:
-                # break
-        # else:
-            # # print("exiting from loop...")
-    
+            if not _is_running:
+                return
+        
 
     def on_supported_attributes(self):
         attributes = [
@@ -1677,10 +1736,11 @@ class x_wm:
         data = data
         )
         self.display.send_event(win, sevent)
+        # self.display.flush()
         self.display.sync()
     
     
-    # activate the window by request
+    # activate the window by request - win deco type
     def _activate_window(self, win, dwin, _type):
         if win:
             # the old active window
@@ -1691,14 +1751,24 @@ class x_wm:
                     self.DECO_WIN[self.active_window].grab_button(1, X.AnyModifier, True,
                                 X.ButtonPressMask|X.ButtonReleaseMask|X.EnterWindowMask, X.GrabModeAsync,
                                 X.GrabModeAsync, X.NONE, X.NONE)
+                    self.display.sync()
                 else:
                     self.active_window.change_attributes(border_pixel=border_color2)
                 self.active_window.grab_button(1, X.AnyModifier, True,
+                        X.ButtonPressMask|X.ButtonReleaseMask|X.EnterWindowMask, X.GrabModeAsync,
+                        X.GrabModeAsync, X.NONE, X.NONE)
+                self.display.sync()
+                #
+                if self.active_window in self.transient_windows:
+                    w_tr = self.transient_windows[self.active_window]
+                    w_tr.grab_button(1, X.AnyModifier, True,
                             X.ButtonPressMask|X.ButtonReleaseMask|X.EnterWindowMask, X.GrabModeAsync,
                             X.GrabModeAsync, X.NONE, X.NONE)
-                # self.display.sync()
+                    #
+                    self.display.sync()
             #
             ############
+            #
             # the new active window
             self.active_window = win
             #
@@ -1712,28 +1782,33 @@ class x_wm:
             if dwin:
                 dwin.change_attributes(border_pixel=border_color1)
                 dwin.ungrab_button(1, X.AnyModifier)
+                self.display.sync()
             else:
                 self.active_window.change_attributes(border_pixel=border_color1)
-                self.active_window.ungrab_button(1, X.AnyModifier)
+            self.active_window.ungrab_button(1, X.AnyModifier)
+            self.display.sync()
             #
             if dwin:
                 dwin.raise_window()
             #
-            self.active_window.set_input_focus(X.RevertToParent, X.CurrentTime)
+            self.active_window.set_input_focus(X.RevertToPointerRoot, X.CurrentTime)
             self.active_window.raise_window()
-            self.display.sync()
             # its transient
             if self.active_window in self.transient_windows:
                 w_tr = self.transient_windows[self.active_window]
                 w_tr.raise_window()
                 w_tr.change_attributes(border_pixel=border_color2)
+                # self.display.sync()
+                w_tr.ungrab_button(1, X.AnyModifier)
             #
+            self.display.sync()
             #
             self._update_active_window(self.active_window)
 
     
     # find a window to set as active
     def _find_and_update_the_active(self, win):
+        #
         if win == self.active_window:
             #
             if self.active_window in self.DECO_WIN:
@@ -1794,6 +1869,8 @@ class x_wm:
                         if self.DECO_WIN[iitem]:
                             self.DECO_WIN[iitem].ungrab_button(1, X.AnyModifier)
                             self.DECO_WIN[iitem].raise_window()
+                        # else:
+                            # iitem.ungrab_button(1, X.AnyModifier)
                         #
                         self.active_window.ungrab_button(1, X.AnyModifier)
                         #
@@ -1801,7 +1878,6 @@ class x_wm:
                         self.active_window.raise_window()
                         self.display.sync()
                         #
-                        # UPDATE THE ATOM
                         self._update_active_window(self.active_window)
                         # its transient window
                         if self.active_window in self.transient_windows:
@@ -1822,7 +1898,7 @@ class x_wm:
             if not win in self.MINIMIZED_WINDOWS:
                 if win in self.DECO_WIN:
                     deco = self.DECO_WIN[win]
-                    # Xutil.WithdrawnState, Xutil.NormalState, Xutil.IconicState
+                    #
                     win.set_wm_state(state = Xutil.WithdrawnState, icon = X.NONE)
                     self.display.sync()
                     # set the hidden state
@@ -1837,6 +1913,9 @@ class x_wm:
                     self.MINIMIZED_WINDOWS[win] = deco
                     #
                     win.unmap()
+                    # transient
+                    if win in self.transient_windows:
+                        self.transient_windows[win].unmap()
                     #
                     if win == self.active_window:
                         self._find_and_update_the_active(win)
@@ -1847,10 +1926,9 @@ class x_wm:
                 deco = self.MINIMIZED_WINDOWS[win]
                 if deco:
                     deco.map()
+                    deco.raise_window()
                 win.map()
-                # Xutil.WithdrawnState, Xutil.NormalState, Xutil.IconicState
-                win.set_wm_state(state = Xutil.NormalState, icon = X.NONE)
-                self.display.sync()
+                win.raise_window()
                 # set the hidden state
                 win.change_property(
                     self.NET_WM_STATE,
@@ -1876,18 +1954,15 @@ class x_wm:
                                                 X.GrabModeAsync, X.NONE, X.NONE)
                             self.active_window.change_attributes(border_pixel=border_color2)
                 # new active window
-                if win in self.DECO_WIN:
-                    if self.DECO_WIN[win]:
-                        win.change_attributes(border_pixel=border_color1)
-                        #self.display.flush()
-                        self.DECO_WIN[win].raise_window()
-                    else:
-                        win.change_attributes(border_pixel=border_color1)
-                        #self.display.flush()
+                if self.DECO_WIN[win]:
+                    self.DECO_WIN[win].change_attributes(border_pixel=border_color1)
+                else:
+                    win.change_attributes(border_pixel=border_color1)
+                self.display.flush()
                 #
                 win.ungrab_button(1, X.AnyModifier)
                 win.set_input_focus(X.RevertToPointerRoot, X.CurrentTime)
-                win.raise_window()
+                #
                 self.display.sync()
                 #
                 if win in self.all_windows_stack:
@@ -1896,12 +1971,13 @@ class x_wm:
                 self._update_client_list_stack()
                 #
                 self.active_window = win
-                #
                 self._update_active_window(self.active_window)
                 # its transient window
                 if self.active_window in self.transient_windows:
                     w_tr = self.transient_windows[self.active_window]
+                    w_tr.map()
                     w_tr.raise_window()
+                    self.display.sync()
                 # success
                 return 0
             #
