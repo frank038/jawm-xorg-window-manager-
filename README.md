@@ -5,7 +5,6 @@ Free to use and modify.
 Requirements:
 - python3
 - xlib
-- ewmh
 - PIL
 - pidof or pgrep
 
@@ -34,9 +33,10 @@ What is supported:
 Limitations:
 - no multimonitor support;
 - no virtual desktops support;
+- no text nor icon in the titlebar;
 - other missing features.
 
-Early release, but usable. Tint2 can be used with this wm.
+Early release, almost finished, but usable. Tint2 can be used with this wm.
 
 Known issues:
 - firefox: fullscreen mode doesn't work properly (I have no idea)
