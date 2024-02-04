@@ -1,13 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
 <svg version="1.2" width="40.03mm" height="28.03mm" viewBox="999 999 4003 2803" preserveAspectRatio="xMidYMid" fill-rule="evenodd" stroke-width="28.222" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" xmlns:ooo="http://xml.openoffice.org/svg/export" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:presentation="http://sun.com/xmlns/staroffice/presentation" xmlns:smil="http://www.w3.org/2001/SMIL20/" xmlns:anim="urn:oasis:names:tc:opendocument:xmlns:animation:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xml:space="preserve">
- <defs>
-  <font id="EmbeddedFont_1" horiz-adv-x="2048">
-   <font-face font-family="Symbola embedded" units-per-em="2048" font-weight="normal" font-style="normal" ascent="1892" descent="701"/>
-   <missing-glyph horiz-adv-x="2048" d="M 0,0 L 2047,0 2047,2047 0,2047 0,0 Z"/>
-   <glyph unicode="◻" horiz-adv-x="1059" d="M 1158,59 L 112,59 112,1105 1158,1105 1158,59 Z M 1058,159 L 1058,1005 212,1005 212,159 1058,159 Z"/>
-  </font>
- </defs>
  <defs class="EmbeddedBulletChars">
   <g id="bullet-char-template-57356" transform="scale(0.00048828125,-0.00048828125)">
    <path d="M 580,1141 L 1163,571 580,0 -4,571 580,1141 Z"/>
@@ -41,12 +34,19 @@
   </g>
  </defs>
  <g class="Page">
-  <g class="com.sun.star.drawing.CustomShape">
-   <g id="id3">
-    <rect class="BoundingBox" stroke="none" fill="none" x="999" y="999" width="4003" height="2803"/>
-    <path fill="rgb(210,174,38)" stroke="none" d="M 3000,3800 L 1000,3800 1000,1000 5000,1000 5000,3800 3000,3800 Z"/>
-    <path fill="none" stroke="rgb(210,174,38)" d="M 3000,3800 L 1000,3800 1000,1000 5000,1000 5000,3800 3000,3800 Z"/>
-    <text class="SVGTextShape"><tspan class="TextParagraph" font-family="Symbola" font-size="3387px" font-weight="400"><tspan class="TextPosition" x="1949" y="3390"><tspan fill="rgb(255,255,255)" stroke="none" style="white-space: pre">◻</tspan></tspan></tspan></text>
+  <g class="Group">
+   <g class="com.sun.star.drawing.ClosedBezierShape">
+    <g id="id3">
+     <rect class="BoundingBox" stroke="none" fill="none" x="999" y="999" width="4003" height="2803"/>
+     <path fill="rgb(210,174,38)" stroke="none" d="M 1000,3800 C 1000,2867 1000,1933 1000,1000 2333,1000 3667,1000 5000,1000 5000,1933 5000,2867 5000,3800 3667,3800 2333,3800 1000,3800 Z"/>
+     <path fill="none" stroke="rgb(210,174,38)" d="M 1000,3800 L 1000,1000 5000,1000 5000,3800 1000,3800 Z"/>
+    </g>
+   </g>
+   <g class="com.sun.star.drawing.ClosedBezierShape">
+    <g id="id4">
+     <rect class="BoundingBox" stroke="none" fill="none" x="2134" y="1563" width="1732" height="1731"/>
+     <path fill="rgb(255,255,255)" stroke="none" d="M 3864,3293 C 3288,3293 2711,3293 2135,3293 2135,2716 2135,2140 2135,1563 2711,1563 3288,1563 3864,1563 3864,2140 3864,2716 3864,3293 Z M 3699,3128 C 3699,2661 3699,2195 3699,1728 3233,1728 2766,1728 2300,1728 2300,2195 2300,2661 2300,3128 2766,3128 3233,3128 3699,3128 Z"/>
+    </g>
    </g>
   </g>
  </g>
