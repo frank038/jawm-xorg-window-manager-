@@ -17,7 +17,7 @@ What is supported:
 - titlebar buttons: close, maximize and minimize
 - keyboard actions, using the mandatory Super_L key (left win key):
   - close the active window: c
-  - move the window: m
+  - maximize the window: m
   - minimize the window: n
   - exit from this wm: e
   - left mouse button: move the window
@@ -33,10 +33,11 @@ What is supported:
 Limitations:
 - no multimonitor support;
 - no virtual desktops support;
+- no pager support;
 - no text nor icon in the titlebar;
 - other missing features.
 
-Early release, almost finished, but usable. Tint2 can be used with this wm.
+Development release, almost finished, and usable. Tint2 can be used with this wm.
 
 Known issues:
 - firefox: fullscreen mode doesn't work properly (I have no idea)
