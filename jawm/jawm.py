@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# v. 20240207
+# v. 20240208
 
 ##############
 ##### OPTIONS
@@ -38,7 +38,7 @@ _STATE = "Super_L"
 _EXIT = "e"
 
 # terminal - key x
-_TERMINAL = ""
+_TERMINAL = "xterm"
 
 # command 1 - key 1
 COMM_1 = ""
@@ -53,7 +53,7 @@ COMM_3 = ""
 COMM_4 = ""
 
 # windows always centered: 1 yes - 0 no
-# if 0, try to use application infos before
+# if 0, try to use application data before
 ALWAYS_CENTERED = 0
 
 # resize with Super+right mouse button: 0 no - 1 yes
@@ -92,6 +92,7 @@ from Xlib import X, XK, protocol, Xatom, Xutil
 import sys, os, shutil
 import subprocess
 import signal
+#import threading
 from PIL import Image
 
 
@@ -104,6 +105,7 @@ if Display().has_extension('RANDR'):
         from Xlib.ext.randr import RRScreenChangeNotify, RRScreenChangeNotifyMask
         _is_randr = 1
 
+
 screen = Display().screen()
 root = Display().screen().root
 
@@ -115,7 +117,7 @@ elif TITLEBAR_SIZE == 2:
     TITLE_HEIGHT = 36
 BTN_SIZE = TITLE_HEIGHT
 
-# give the focus to the window under the pointer
+# focus to the window under the pointer
 SLOPPY_FOCUS = 1
 
 colormap = Display().screen().default_colormap
@@ -190,6 +192,7 @@ def _screen_usable():
     #
 _screen_usable()
 
+
 # this program pid
 _THIS_PID = 0
 ret_pid = 0
@@ -258,9 +261,11 @@ class x_wm:
                 | X.KeyPressMask | X.KeyReleaseMask)
         #
         self.root.change_attributes(event_mask=mask)
-        # Super_L Alt_L Control_L
+        #
+        # Super_L 
         self.root.grab_key(self.display.keysym_to_keycode(XK.string_to_keysym(_STATE)),
             X.AnyModifier, 1, X.GrabModeAsync, X.GrabModeAsync)
+        #
         # windows with decoration: window:decoration
         self.DECO_WIN = {}
         # all managed windows
@@ -304,12 +309,15 @@ class x_wm:
         #
         self.on_supported_attributes()
         #
+        # self._root_change_property('_NET_NUMBER_OF_DESKTOPS',[1])
         self._root_change_property('_NET_NUMBER_OF_DESKTOPS',[1,0,0,0,0])
         #
+        # self._root_change_property('_NET_DESKTOP_VIEWPORT',[0,0])
         self._root_change_property('_NET_DESKTOP_VIEWPORT',[0,0,0,0,0])
         #
+        # self._root_change_property('_NET_CURRENT_DESKTOP',[0])
         self._root_change_property('_NET_CURRENT_DESKTOP',[0, X.CurrentTime,0,0,0])
-        #
+        # self._root_change_property('_NET_DESKTOP_GEOMETRY',[screen_width, screen_height])
         self._root_change_property('_NET_DESKTOP_GEOMETRY',[screen_width, screen_height,0,0,0])
         #
         self._root_change_property('_NET_WORKAREA',[start_x,start_y,screen_width_usable,screen_height_usable])
@@ -330,6 +338,8 @@ class x_wm:
             self.deco_btn_height = 0
             self.on_deco_btn()
         #
+        # self.on_start()
+        #
         self.main_loop()
     
     
@@ -339,7 +349,7 @@ class x_wm:
             Xatom.CARDINAL,
             32, _data)
     
-    #
+
     def _wm_support(self):
         self._window = self.screen.root.create_window(0, 0, 1, 1, 0,
             self.screen.root_depth,override_redirect=1)
@@ -354,7 +364,7 @@ class x_wm:
             self.display.intern_atom('UTF8_STRING'),
             8,'jawm'.encode())
         # cmd, cls
-        self._window.set_wm_class('jawm', 'JAWM')
+        self._window.set_wm_class('jawm.py', 'JAWM')
         #
         if _THIS_PID:
             self._window.change_property(
@@ -366,6 +376,7 @@ class x_wm:
         #
         if _is_randr == 1:
             self._window.xrandr_select_input(randr.RRScreenChangeNotifyMask)
+
    
     # add a decoration to win
     def win_deco(self, win):
@@ -463,6 +474,7 @@ class x_wm:
         #
         return None
     
+    
     def main_loop(self):
         global screen_width
         global screen_height
@@ -483,16 +495,10 @@ class x_wm:
                 if attrs is None:
                     continue
                 # decoration too
-                win = None
                 if attrs.override_redirect:
                     # find the window from decoration
                     win2 = self.find_win_of_deco(event.window)
                     if win2:
-                        continue
-                    else:
-                        continue
-                    #
-                    if not win:
                         continue
                 # skip if already present
                 if event.window in self.all_windows:
@@ -534,6 +540,8 @@ class x_wm:
                                 self.transient_windows[self.active_window].grab_button(1, X.AnyModifier, True,
                                 X.ButtonPressMask|X.ButtonReleaseMask, X.GrabModeAsync,
                                 X.GrabModeAsync, X.NONE, X.NONE)
+                            #
+                            self.display.sync()
                             # the new active window
                             self.active_window = wwin
                     else:
@@ -558,11 +566,13 @@ class x_wm:
                             self.active_window.set_input_focus(X.RevertToParent, 0)
                         elif self.display.intern_atom("_NET_WM_WINDOW_TYPE_UTILITY") in ew_type_tmp:
                             self.active_window.set_input_focus(X.RevertToParent, 0)
-                        else:
+                        elif ew_type_tmp[0] == self.display.intern_atom("_NET_WM_WINDOW_TYPE_NORMAL"):
                             self.active_window.set_input_focus(X.RevertToPointerRoot, X.CurrentTime)
+                            self.active_window.set_wm_state(state = Xutil.NormalState, icon = X.NONE)
                     else:
                         self.active_window.set_input_focus(X.RevertToPointerRoot, X.CurrentTime)
-                        win.set_wm_state(state = Xutil.NormalState, icon = X.NONE)
+                        # Xutil.WithdrawnState, Xutil.NormalState, Xutil.IconicState
+                        self.active_window.set_wm_state(state = Xutil.NormalState, icon = X.NONE)
                     self.display.sync()
                     #
                     self.active_window.raise_window()
@@ -571,6 +581,26 @@ class x_wm:
                     # self.display.flush()
                     #
                     self._update_active_window(self.active_window)
+                #### demands attention initial state hint
+                _hints = event.window.get_wm_hints() or { 'flags': 0 }
+                if (_hints["flags"] & Xutil.UrgencyHint):
+                    ### message to everyone else
+                    _window = self.active_window
+                    _message_type = self.NET_WM_STATE
+                    _format = 32
+                    _atom1 = self.STATE_DEMANDS_ATTENTION
+                    _data = [1, _atom1, 0, 0, 0]
+                    #
+                    sevent = protocol.event.ClientMessage(
+                    window = _window,
+                    client_type = self.NET_WM_STATE,
+                    data=(32, (_data))
+                    )
+                    mask = (X.SubstructureRedirectMask | X.SubstructureNotifyMask)
+                    self.root.send_event(sevent, event_mask=mask)
+                    self.display.sync()
+                    self.display.flush()
+                    #
             #
             elif event.type == X.MapRequest:
                 if event.window == X.NONE or event.window == None:
@@ -598,6 +628,7 @@ class x_wm:
                 # not to be managed by window manager
                 if attrs.override_redirect:
                     continue
+                #
                 # window_group hint
                 whints = event.window.get_wm_hints()
                 if hasattr(whints, "window_group"):
@@ -634,8 +665,6 @@ class x_wm:
                             global DOCK_HEIGHT_B
                             # _NET_WM_STRUT, left, right, top, bottom, CARDINAL[4]/32
                             _result = self.getProp(event.window, 'STRUT')
-                            # _result = event.window.get_full_property(self.display.get_atom('_NET_WM_STRUT'), Xatom.CARDINAL)
-                            #
                             if _result:
                                 DOCK_HEIGHT_X += _result[0]
                                 DOCK_HEIGHT_Y += _result[1]
@@ -656,7 +685,7 @@ class x_wm:
                                     DOCK_HEIGHT_B += _result[3]
                                     _screen_usable()
                                     self._root_change_property('_NET_WORKAREA',[start_x,start_y,screen_width_usable,screen_height_usable])
-                            # 
+                            #
                             event.window.configure(x=geom.x, y=geom.y)#, width=screen_width, height=screen_height)
                             #
                             event.window.map()
@@ -763,7 +792,6 @@ class x_wm:
                             # add the border
                             event.window.configure(border_width=BORDER_WIDTH2)
                             #
-                            # mask = X.EnterWindowMask | X.LeaveWindowMask
                             mask = X.EnterWindowMask|X.StructureNotifyMask
                             event.window.change_attributes(event_mask=mask)
                             #
@@ -771,14 +799,14 @@ class x_wm:
                             #
                             event.window.map()
                             event.window.raise_window()
-                            #
+                            ##########
                             continue
                 #
                 deco = self.win_deco(event.window)
                 #
                 if deco != -1:
-                    deco.change_attributes(attrs)
-                    self.display.sync()
+                    # deco.change_attributes(attrs)
+                    # self.display.sync()
                     #
                     self.DECO_WIN[event.window] = deco
                     # deco.map()
@@ -790,6 +818,7 @@ class x_wm:
                 event.window.raise_window()
                 event.window.map()
                 if deco != -1:
+                    #deco.configure(x=x, y=y)
                     deco.map()
                 #
                 if NO_DECO == 0:
@@ -797,13 +826,14 @@ class x_wm:
                     if dgeom.y < start_y:
                         deco.configure(x=x, y=start_y)
                         event.window.configure(x=x+BORDER_WIDTH+BORDER_WIDTH2, y=start_y+TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2)
-                        
-                # mask = X.EnterWindowMask | X.LeaveWindowMask
+                #
                 mask = X.EnterWindowMask
                 event.window.change_attributes(event_mask=mask)
                 #
                 continue
                 #
+            # elif event.type == X.CreateNotify:
+                # pass
             #
             elif event.type == X.Expose:
                 # if event.count == 0:
@@ -873,7 +903,6 @@ class x_wm:
                         DOCK_HEIGHT_B = max(DOCK_HEIGHT_B, 0)
                         _screen_usable()
                     #
-                    # self.dock_windows.remove(event.window)
                     del self.dock_windows[event.window]
                     self.all_windows.remove(event.window)
                     self._update_client_list()
@@ -1152,8 +1181,11 @@ class x_wm:
                             if shutil.which(COMM_4):
                                 subprocess.Popen([COMM_4])
             #
-            elif event.type == X.CirculateRequest:
-                continue
+            # elif event.type == X.ConfigureNotify:
+                # continue
+            #
+            # elif event.type == X.CirculateRequest:
+                # continue
             #
             elif event.type == X.KeyRelease:
                 # on root
@@ -1162,7 +1194,8 @@ class x_wm:
                         continue
                 # 
                 if self.key_press_window:
-                    self.key_press_window.ungrab_button(1, X.AnyModifier)
+                    if self.active_window == self.key_press_window:
+                        self.key_press_window.ungrab_button(1, X.AnyModifier)
                     if RESIZE_WITH_KEY:
                         self.key_press_window.ungrab_button(3, X.AnyModifier)
             # 
@@ -1328,6 +1361,7 @@ class x_wm:
                             ############## DRAG - decoration #############
                             else:
                                 # skip window at back
+                                # TO DO: make wwin active and drag
                                 if wwin != self.active_window:
                                     continue
                                 #
@@ -1362,6 +1396,7 @@ class x_wm:
                                 wwin.raise_window()
                                 #
                                 self._activate_window(wwin, ddeco, 0)
+                                # ######## actually useless
                                 # wm_state = self.NET_WM_STATE
                                 # _atm = self.display.get_atom('_NET_ACTIVE_WINDOW')
                                 # # _data = [1, X.CurrentTime,window.id,0,0]
@@ -1441,7 +1476,7 @@ class x_wm:
                     # win.ungrab_pointer()
                     #
                     self.grabbed_window_btn1 = None
-                    # NON SO - sembra necessario
+                    #
                     self.display.ungrab_pointer(X.CurrentTime)
                     continue
             #
@@ -1459,12 +1494,20 @@ class x_wm:
                     continue
             #
             elif event.type == X.ClientMessage:
+                # print("1313 clientMessage::", event)
                 #
                 if event.client_type == self.display.intern_atom("_NET_WM_MOVERESIZE"):
+                    # print("** cl move_resize")
                     fmt, data = event.data
                     if fmt == 32:
                         # move using mouse
                         if data[2] == 8:
+                            # data.l[0] = x_root 
+                            # data.l[1] = y_root
+                            # data.l[2] = direction - 8 move - 11 cancel - 4 resize_bottom_right
+                            # data.l[3] = button
+                            # data.l[4] = source indication - 1
+                            ########
                             self.grabbed_window_btn1 = deco
                             self.mouse_button_left = 1
                             event.window.grab_pointer(True, X.PointerMotionMask | X.ButtonReleaseMask, X.GrabModeAsync,
@@ -1501,21 +1544,31 @@ class x_wm:
                                 self.btn1_drag = None
                                 self.window_resize_geometry = None
                                 self.mouse_button_resize_drag_start_point = None
-                            #
+                            # file-roller: senza va in crash se premo in file-roller
                             if self.grabbed_window_btn1:
                                 self.mouse_button_left = 0
                                 self.delta_drag_start_point = None
                                 self.grabbed_window_btn1.ungrab_button(1, X.AnyModifier)
                                 #
                                 self.grabbed_window_btn1 = None
+                                #
                                 self.display.ungrab_pointer(X.CurrentTime)
                                 #
                     #
                     continue
                 #
+                # if event.client_type == self.display.intern_atom("_NET_RESTACK_WINDOW"):
+                    # # from pagers
+                    # continue
+                #
                 if event.client_type == self.NET_ACTIVE_WINDOW:
                     fmt, data = event.data
                     #
+                    # 1 from application - 2 from pager and other similars (tint2) - 0 from old applications
+                    # data = [1/2/0, timestamp/_NET_WM_USER_TIME, win.id,0,0]
+                    # Depending on the information provided with the message, 
+                    # the Window Manager may decide to refuse the request 
+                    # (either completely ignore it, or e.g. use _NET_WM_STATE_DEMANDS_ATTENTION).
                     if fmt == 32 and data[0] in [1,2,0]:
                     # if fmt == 32 and data[0] in [1,2]:
                         win = None
@@ -1530,7 +1583,6 @@ class x_wm:
                     continue
                 #
                 if event.client_type == self.WM_CHANGE_STATE:
-                    # con tint2: data = [3,0,0,0,0]
                     fmt, data = event.data
                     # WithdrawnState 0 - NormalState 1 - IconicState 3
                     if fmt == 32:
@@ -1548,43 +1600,56 @@ class x_wm:
                         # 1 add - 2 toggle
                         if data[0] == 1 or data[0] == 2:
                             self.maximize_window(event.window)
-                        # deve essere settato stato
                         # 0 remove
                         elif data[0] == 0:
                             self.maximize_window(event.window)
                     #
                     elif fmt == 32 and data[1] == self.WM_HIDDEN:
-                        #
                         if data[0] == 2 or data[0] == 1:
                             self.minimize_window(event.window, data[0])
                         elif data[0] == 0:
                             self.minimize_window(event.window, data[0])
                     # fullscreen
                     elif fmt == 32 and data[1] == self.WM_FULLSCREEN:
+                        # if data[0] == 2:
                         if data[0] in [0,1,2]:
                             self.fullscreen_window(event.window, data[0])
                     #
+                    # demands attention - WM_HINTS.flags property of window - set_wm_hints
                     elif fmt == 32 and data[1] == self.STATE_DEMANDS_ATTENTION:
+                        # ##  Urgency
+                        # Windows expecting immediate user action should 
+                        # indicate this using the urgency bit in the 
+                        # WM_HINTS.flags property, as defined in the ICCCM.
+                        # skip actve window
+                        if event.window == self.active_window:
+                            continue
+                        # add
                         if data[0] == 1:
                             hints = event.window.get_wm_hints() or { 'flags': 0 }
                             hints['flags'] |= Xutil.UrgencyHint
                             event.window.set_wm_hints(hints)
                             hints = event.window.get_wm_hints()
                             self.display.flush()
+                        # remove
                         elif data[0] == 0:
                             hints = event.window.get_wm_hints() or { 'flags': 0 }
+                            # remove
                             hints['flags'] &= ~Xutil.UrgencyHint
                             event.window.set_wm_hints(hints)
                             self.display.flush()
                             hints = event.window.get_wm_hints()
                         # toggle urgency
                         elif data[0] == 2:
+                            #
                             hints = event.window.get_wm_hints() or { 'flags': 0 }
                             if hints['flags'] & Xutil.UrgencyHint:
+                                # remove
                                 hints['flags'] &= ~Xutil.UrgencyHint
                                 event.window.set_wm_hints(hints)
                                 self.display.flush()
                             else:
+                                # add
                                 hints = event.window.get_wm_hints() or { 'flags': 0 }
                                 hints['flags'] |= Xutil.UrgencyHint
                                 event.window.set_wm_hints(hints)
@@ -1600,6 +1665,14 @@ class x_wm:
                 #
                 if event.client_type == self.display.intern_atom("_NET_CLOSE_WINDOW"):
                     if event.window in self.DECO_WIN:
+                        # fmt, data = event.data
+                        # # 1 from application - 2 from pagers and others
+                        # if fmt == 32 and data[1] == 2:
+                            # ddeco = self.DECO_WIN[event.window]
+                            # if ddeco:
+                                # ddeco.destroy()
+                            # event.window.destroy()
+                        # else:
                         self.close_window(event.window)
                     #
                     continue
@@ -1612,28 +1685,61 @@ class x_wm:
                             self.close_window(event.window)
                     #
                     continue
-                # another WM want to take the ownership
+                # another WM wants to take the ownership
                 if event.client_type == self.display.intern_atom("MANAGER"):
                     fmt, data = event.data
                     if fmt == 32:
                         if data[1] == self.WM_S:
-                            # # # sys.exit(0)
-                            # if self.display.get_selection_owner(self.WM_S) == 0 or self.display.get_selection_owner != self._window:
-                                # self._window.set_selection_owner(X.NONE, X.CurrentTime)
-                                # for ww in [self.root, self._window]:
-                                    # ww.change_property(self.display.get_atom('_NET_SUPPORTING_WM_CHECK'),
-                                        # Xatom.WINDOW,32,[X.NONE])
-                                # # #
-                                # # self._window.destroy()
-                                # # os.kill(_THIS_PID, 9)
-                                # return
+                            # # sys.exit(0)
+                            if self.display.get_selection_owner(self.WM_S) == 0 or self.display.get_selection_owner != self._window:
+                                self._window.set_selection_owner(X.NONE, X.CurrentTime)
+                                for ww in [self.root, self._window]:
+                                    ww.change_property(self.display.get_atom('_NET_SUPPORTING_WM_CHECK'),
+                                        Xatom.WINDOW,32,[X.NONE])
+                                #
+                                self._window.destroy()
+                                # os.kill(_THIS_PID, 9)
+                                return
                             #
                             continue
+            # #
+            # elif event.type == X.SelectionNotify:
+                # pass
             #
             elif event.type == X.ConfigureRequest:
+                # print("*** 916 configure request::", event, self.get_window_name(event.window))
                 #
                 if event.window == None or event.window == self.root:
                     continue
+                # # center the window
+                # win_geom = event.window.get_geometry()
+                # # #
+                # # if _is_transient:
+                    # # par_win_geom = _is_transient.get_geometry()
+                    # # x = int((par_win_geom.width-win_geom.width)/2+par_win_geom.x)
+                    # # y = int((par_win_geom.height-win_geom.height+TITLE_HEIGHT/2)/2+par_win_geom.y)
+                    # # # always in the screen
+                    # # if (x + win_geom.width) > screen_width_usable or (y + win_geom.height) > screen_height_usable:
+                        # # x = int((screen_width_usable-win_geom.width)/2)
+                        # # y = int((screen_height_usable-win_geom.height)/2)
+                # # else:
+                    # # if ALWAYS_CENTERED == 0:
+                        # # if win_geom.x > 0 or win_geom.y > 0:
+                            # # x = max(win_geom.x, start_x)
+                            # # y = max(win_geom.y, start_y)
+                        # # else:
+                            # # x = int((screen_width_usable-win_geom.width)/2)
+                            # # y = int((screen_height_usable-win_geom.height)/2)
+                    # # elif ALWAYS_CENTERED == 1:
+                        # # x = int((screen_width_usable-win_geom.width)/2)
+                        # # y = int((screen_height_usable-win_geom.height)/2)
+                # ######## 
+                
+                # # mask |= XCB_CONFIG_WINDOW_X;
+                # # mask |= XCB_CONFIG_WINDOW_Y;
+                # # mask |= XCB_CONFIG_WINDOW_WIDTH;
+                # # mask |= XCB_CONFIG_WINDOW_HEIGHT;
+                # # XCB_STACK_MODE_ABOVE
                 #
                 window = event.window
                 x = max(event.x, start_x)
@@ -1656,6 +1762,7 @@ class x_wm:
                     window.configure(x=x, y=y, width=width, height=height)
                     continue
                 #
+                # y += TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2
                 window.configure(x=x, y=y, width=width, height=height)
                 if window in self.DECO_WIN:
                     if self.DECO_WIN[window]:
@@ -1702,11 +1809,132 @@ class x_wm:
                             #
                         self.DECO_WIN[event.window].configure(x=x-BORDER_WIDTH-BORDER_WIDTH2, y=y-TITLE_HEIGHT-BORDER_WIDTH-BORDER_WIDTH2, 
                                 width=width+BORDER_WIDTH+BORDER_WIDTH2, height=height+TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2)
-                #
+                # #
+                # continue
+                # #
+                # mask = event.value_mask
+                # if mask == 0b1111:
+                    # event.window.configure(x=x, y=y, width=width, height=height)
+                    # if event.window in self.DECO_WIN:
+                        # if self.DECO_WIN[event.window]:
+                            # self.DECO_WIN[event.window].configure(x=x-BORDER_WIDTH-BORDER_WIDTH2, y=y-TITLE_HEIGHT-BORDER_WIDTH-BORDER_WIDTH2, 
+                                    # width=width+BORDER_WIDTH+BORDER_WIDTH2, height=height+TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2)
+                # elif mask == 0b1100:
+                    # event.window.configure(width=width, height=height)
+                    # if event.window in self.DECO_WIN:
+                        # if self.DECO_WIN[event.window]:
+                            # self.DECO_WIN[event.window].configure(width=width+BORDER_WIDTH+BORDER_WIDTH2, height=height+TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2)
+                # elif mask == 0b0011:
+                    # event.window.configure(x=x, y=y)
+                    # if event.window in self.DECO_WIN:
+                        # if self.DECO_WIN[event.window]:
+                            # self.DECO_WIN[event.window].configure(x=x-BORDER_WIDTH-BORDER_WIDTH2, y=y-TITLE_HEIGHT-BORDER_WIDTH-BORDER_WIDTH2)
+                # elif mask == 0b01000000:
+                    # #window.configure(event.stack_mode)
+                    # event.window.configure(x=x, y=y, width=width, height=height)
+                    # if event.window in self.DECO_WIN:
+                        # if self.DECO_WIN[event.window]:
+                            # self.DECO_WIN[event.window].configure(x=x-BORDER_WIDTH-BORDER_WIDTH2, y=y-TITLE_HEIGHT-BORDER_WIDTH-BORDER_WIDTH2, 
+                                    # width=width+BORDER_WIDTH+BORDER_WIDTH2, height=height+TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2)
+                # #
+                # continue
+                # #
+                # ######################
+                # window = event.window
+                # x, y = event.x, event.y
+                # width, height = event.width, event.height
+                # mask = event.value_mask
+                # #
+                # if mask in [0b1111,0b1100,0b0011,0b01000000]:
+                    # #
+                    # # window restore from fullscreen state
+                    # if self.window_in_fullscreen_state:
+                        # if event.window == self.window_in_fullscreen_state[0]:
+                            # if event.sequence_number == self.window_in_fullscreen_state[1]:
+                                # continue
+                            # if width == screen_width and height == screen_height:
+                                # self.window_in_fullscreen_state = []
+                                # continue
+                            # #
+                            # event.window.configure(x=x, y=y, width=width, height=height)
+                            # if self.DECO_WIN[event.window]:
+                                # # self.DECO_WIN[event.window].map()
+                                # self.DECO_WIN[event.window].raise_window()
+                            # #
+                            # event.window.raise_window()
+                            # if self.DECO_WIN[event.window]:
+                                # self.DECO_WIN[event.window].map()
+                            # #
+                            # # self.window_in_fullscreen_state = []
+                            # continue
+                    # #
+                    # # into fullscreen
+                    # if width == screen_width and height == screen_height:
+                        # if self.window_in_fullscreen_state_CM:
+                            # continue
+                        # # skip unwanted request - mpv
+                        # if self.window_in_fullscreen_state:
+                            # if event.window == self.window_in_fullscreen_state[0]:
+                                # continue
+                        # #######
+                        # if event.window in self.DECO_WIN:
+                            # if self.DECO_WIN[event.window]:
+                                # self.DECO_WIN[event.window].unmap()
+                        # event.window.raise_window()
+                        # event.window.configure(x=0, y=0, width=screen_width, height=screen_height)
+                        # self.window_in_fullscreen_state = [event.window, event.sequence_number]
+                        # continue
+                    # #
+                    # else:
+                        # #
+                        # event.window.configure(x=x, y=y, width=width, height=height)
+                        # #
+                        # if event.window in self.DECO_WIN:
+                            # if self.DECO_WIN[event.window]:
+                                # self.DECO_WIN[event.window].configure(x=x-BORDER_WIDTH-BORDER_WIDTH2, y=y-TITLE_HEIGHT-BORDER_WIDTH-BORDER_WIDTH2, 
+                                    # width=width+BORDER_WIDTH+BORDER_WIDTH2, height=height+TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2)
+                                # #
+                                # continue
             #
             if not _is_running:
                 return
         
+    
+    # # TO DO
+    # def on_start(self):
+        # children = self.root.query_tree().children
+        # for win in children:
+            # # skip windows dont want decoration
+            # attrs = win.get_attributes()
+            # if attrs.override_redirect:
+                # continue
+            # #
+            # # skip the window manager
+            # if self.get_window_name(win) == "qtwm-1":
+                # if not attrs.override_redirect:
+                    # event.window.change_attributes(override_redirect=1)
+                # #
+                # continue
+            # #
+            # # skip the dock
+            # if self.get_window_name(win) == "qtdock-1":
+                # # if not attrs.override_redirect:
+                    # # event.window.change_attributes(override_redirect=1)
+                # continue
+            # #
+            # WIN_TYPE = self.get_window_type(win, "_NET_WM_WINDOW_TYPE")
+            # #
+            # geom = win.get_geometry()
+            # childName = self.get_window_name(win)
+            # if childName == "qtdock-1":
+                # continue
+            # self.sig.emit([win, geom.x, geom.y, geom.width, geom.height, 1, childName])
+            # #
+            # global all_windows
+            # global all_windows_stack
+            # all_windows.append(win)
+            # all_windows_stack.append(win)
+
 
     def on_supported_attributes(self):
         attributes = [
@@ -1767,6 +1995,7 @@ class x_wm:
             [self.display.get_atom(x) for x in attributes],)
         self.display.sync()
         
+        
     def _update_client_list(self):
         self.root.change_property(
             self.display.get_atom('_NET_CLIENT_LIST'),
@@ -1774,6 +2003,7 @@ class x_wm:
             32,
             [window.id for window in self.all_windows],)
         self.display.sync()
+        
         
     def _update_client_list_stack(self):
         self.root.change_property(
@@ -1794,6 +2024,7 @@ class x_wm:
             32,
             [win_id])
         self.display.sync()
+    
     
     def fullscreen_window(self, win, _type):
         # _type = 2 is toggle
@@ -1857,7 +2088,6 @@ class x_wm:
         data = data
         )
         self.display.send_event(win, sevent)
-        # self.display.flush()
         self.display.sync()
     
     
@@ -1930,6 +2160,28 @@ class x_wm:
                 w_tr.ungrab_button(1, X.AnyModifier)
             #
             self.display.sync()
+            # remove the demands attention hint
+            hints = self.active_window.get_wm_hints() or { 'flags': 0 }
+            if (hints['flags'] & Xutil.UrgencyHint):
+                hints['flags'] &= ~Xutil.UrgencyHint
+                self.active_window.set_wm_hints(hints)
+                self.display.flush()
+                ### message to everyone else, for resetting
+                _window = self.active_window
+                _message_type = self.NET_WM_STATE
+                _format = 32
+                _atom1 = self.STATE_DEMANDS_ATTENTION
+                _data = [0, _atom1, 0, 0, 0]
+                #
+                sevent = protocol.event.ClientMessage(
+                window = _window,
+                client_type = self.NET_WM_STATE,
+                data=(32, (_data))
+                )
+                mask = (X.SubstructureRedirectMask | X.SubstructureNotifyMask)
+                self.root.send_event(sevent, event_mask=mask)
+                self.display.sync()
+                self.display.flush()
             #
             self._update_active_window(self.active_window)
 
@@ -1973,6 +2225,7 @@ class x_wm:
                     if iitem in self.desktop_window:
                         continue
                     # skip minimized windows
+                    # error without try maybe
                     try:
                         if hasattr(iitem.get_wm_state(), "state"):
                             if iitem.get_wm_state().state == 0:
@@ -1992,7 +2245,7 @@ class x_wm:
                             iitem.change_attributes(border_pixel=border_color1)
                         #
                         self.active_window = iitem
-                        # 
+                        #
                         if self.DECO_WIN[iitem]:
                             self.DECO_WIN[iitem].ungrab_button(1, X.AnyModifier)
                             # unmap to avoid something from deco
@@ -2050,6 +2303,7 @@ class x_wm:
                         X.PropModeReplace)
                     self.display.sync()
                     #
+                    # in X.UnmapNotifier
                     # if deco:
                         # deco.unmap()
                     self.MINIMIZED_WINDOWS[win] = deco
