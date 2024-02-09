@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# v. 20240208
+# v. 20240209
 
 ##############
 ##### OPTIONS
@@ -41,16 +41,16 @@ _EXIT = "e"
 _TERMINAL = "xterm"
 
 # command 1 - key 1
-COMM_1 = ""
+COMM_1 = "qterminal"
 
 # command 2 - key 2
-COMM_2 = ""
+COMM_2 = "file-roller"
 
 # command 3 - key 3
-COMM_3 = ""
+COMM_3 = "yad-icon-browser"
 
 # command 4 - key 4
-COMM_4 = ""
+COMM_4 = "tint2"
 
 # windows always centered: 1 yes - 0 no
 # if 0, try to use application data before
@@ -126,13 +126,13 @@ border_color1 = colormap.alloc_named_color(DECO_BORDER_COLOR1).pixel
 border_color2 = colormap.alloc_named_color(DECO_BORDER_COLOR2).pixel
 
 
-WINDOW_WITH_DECO = [
+WINDOWS_WITH_DECO = [
 "_NET_WM_WINDOW_TYPE_UTILITY",
 "_NET_WM_WINDOW_TYPE_DIALOG",
 "_NET_WM_WINDOW_TYPE_NORMAL",
 ]
 
-WINDOW_WITH_NO_DECO = [
+WINDOWS_WITH_NO_DECO = [
 '_NET_WM_WINDOW_TYPE_TOOLBAR',
 '_NET_WM_WINDOW_TYPE_MENU',
 '_NET_WM_WINDOW_TYPE_DND',
@@ -144,7 +144,8 @@ WINDOWS_MAPPED_WITH_NO_DECO = [
 '_NET_WM_WINDOW_TYPE_DOCK',
 '_NET_WM_WINDOW_TYPE_DESKTOP',
 '_NET_WM_WINDOW_TYPE_SPLASH',
-'_NET_WM_WINDOW_TYPE_NOTIFICATION']
+'_NET_WM_WINDOW_TYPE_NOTIFICATION',
+'_NET_WM_WINDOW_TYPE_TOOLTIP']
 
 _is_running = 1
 
@@ -278,7 +279,7 @@ class x_wm:
         self.MINIMIZED_WINDOWS = {}
         # current active window (the program)
         self.active_window = None
-        # a window is desktop type
+        # the window is a desktop type
         self.desktop_window = []
         # windows that are dock type: window - x y t b
         self.dock_windows = {}
@@ -511,6 +512,15 @@ class x_wm:
                 # desktop
                 if event.window in self.desktop_window:
                     continue
+                # Other kind of windows mapped with no decoration
+                ew_type_tmp = self.get_window_type(event.window)
+                ew_type = []
+                if ew_type_tmp != 1:
+                    for ee in ew_type_tmp:
+                        ew_type.append(self.display.get_atom_name(ee))
+                if ew_type:
+                    if ew_type[0] in WINDOWS_MAPPED_WITH_NO_DECO:
+                        continue
                 # check if this window is a transient one
                 w_is_transient = event.window.get_full_property(self.display.get_atom("WM_TRANSIENT_FOR"), X.AnyPropertyType)
                 if w_is_transient:
@@ -647,7 +657,7 @@ class x_wm:
                         ew_type.append(self.display.get_atom_name(ee))
                 #
                 if ew_type:
-                    if ew_type[0] in WINDOW_WITH_NO_DECO:
+                    if ew_type[0] in WINDOWS_WITH_NO_DECO:
                         # win_geom = event.window.get_geometry()
                         # x = max(win_geom.x, start_x)
                         # y = max(win_geom.y, start_y)
@@ -702,15 +712,26 @@ class x_wm:
                             prop = event.window.get_full_property(self.display.get_atom("_NET_WM_STATE_ABOVE"), X.AnyPropertyType)
                         # desktop
                         elif ew_type[0] == '_NET_WM_WINDOW_TYPE_DESKTOP':
-                            if  self.desktop_window == []:
-                                self.desktop_window.append(event.window)
-                                event.window.configure(x=0, y=0, width=screen_width, height=screen_height)
-                                # put at bottom of all
-                                self.all_windows.insert(0, event.window)
-                                self._update_client_list()
-                                self.all_windows_stack.insert(0, event.window)
-                                self._update_client_list_stack()
-                                event.window.map()
+                            # if  self.desktop_window == []:
+                            self.desktop_window.append(event.window)
+                            event.window.configure(x=0, y=0, width=screen_width, height=screen_height)
+                            # put at bottom of all
+                            self.all_windows.insert(len(self.desktop_window), event.window)
+                            self._update_client_list()
+                            self.all_windows_stack.insert(len(self.desktop_window), event.window)
+                            self._update_client_list_stack()
+                            # the first must be the main desktop application
+                            _desktop_win = None
+                            if self.desktop_window:
+                                _dw = self.desktop_window[0]
+                                if _dw != event.window:
+                                    _desktop_win = _dw
+                            if _desktop_win:
+                                event.window.configure(stack_mode=X.Below, sibling=_desktop_win)
+                            else:
+                                event.window.configure(stack_mode=X.Below)
+                            self.display.sync()
+                            event.window.map()
                         #
                         elif ew_type[0] == '_NET_WM_WINDOW_TYPE_NOTIFICATION':
                             ngeom = event.window.get_geometry()
@@ -728,6 +749,9 @@ class x_wm:
                             x = int((screen_width-win_geom.width)/2)
                             y = int((screen_height-win_geom.height)/2)
                             event.window.configure(x=x, y=y)
+                            event.window.map()
+                        #
+                        elif ew_type[0] == '_NET_WM_WINDOW_TYPE_TOOLTIP':
                             event.window.map()
                         #
                         continue
@@ -975,6 +999,7 @@ class x_wm:
                         self.window_in_fullscreen_state_CM = []
                     #
                     self._find_and_update_the_active(win)
+                #
             #
             elif event.type == X.MotionNotify:
                 #### window resizing
@@ -1496,6 +1521,9 @@ class x_wm:
             elif event.type == X.ClientMessage:
                 # print("1313 clientMessage::", event)
                 #
+                if event.window not in self.all_windows:
+                    continue
+                #
                 if event.client_type == self.display.intern_atom("_NET_WM_MOVERESIZE"):
                     # print("** cl move_resize")
                     fmt, data = event.data
@@ -1753,8 +1781,8 @@ class x_wm:
                         x = event.x
                         y = event.y
                     elif ew_name == '_NET_WM_WINDOW_TYPE_DESKTOP':
-                        x = 0
-                        y = 0
+                        x = event.x
+                        y = event.y
                 #
                 width, height = event.width, event.height
                 #
@@ -2094,7 +2122,7 @@ class x_wm:
     # activate the window by request - win deco type
     def _activate_window(self, win, dwin, _type):
         #
-        if win:
+        if win and win in self.all_windows:
             # the old active window
             if self.active_window:
                 if self.DECO_WIN[self.active_window]:
