@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# v. 20240209
+# v. 20240210
 
 ##############
 ##### OPTIONS
@@ -41,20 +41,16 @@ _EXIT = "e"
 _TERMINAL = "xterm"
 
 # command 1 - key 1
-COMM_1 = "qterminal"
+COMM_1 = ""
 
 # command 2 - key 2
-COMM_2 = "file-roller"
+COMM_2 = ""
 
 # command 3 - key 3
-COMM_3 = "yad-icon-browser"
+COMM_3 = ""
 
 # command 4 - key 4
-COMM_4 = "tint2"
-
-# windows always centered: 1 yes - 0 no
-# if 0, try to use application data before
-ALWAYS_CENTERED = 0
+COMM_4 = ""
 
 # resize with Super+right mouse button: 0 no - 1 yes
 RESIZE_WITH_KEY = 1
@@ -119,6 +115,10 @@ BTN_SIZE = TITLE_HEIGHT
 
 # focus to the window under the pointer
 SLOPPY_FOCUS = 1
+
+# windows always centered: 1 yes - 0 no
+# if 0, try to use application data before
+ALWAYS_CENTERED = 0
 
 colormap = Display().screen().default_colormap
 win_color = colormap.alloc_named_color(DECO_COLOR).pixel
@@ -411,7 +411,7 @@ class x_wm:
         # wret = 0
         # def werror(err, ww):
             # wret = -1
-        #
+        # #
         # win.reparent(deco, BORDER_WIDTH, TITLE_HEIGHT, onerror=werror)
         #
         return deco
@@ -615,7 +615,6 @@ class x_wm:
             elif event.type == X.MapRequest:
                 if event.window == X.NONE or event.window == None:
                     continue
-                #
                 # check if this window is a transient one
                 _is_transient = None
                 prop = None
@@ -723,13 +722,13 @@ class x_wm:
                             # the first must be the main desktop application
                             _desktop_win = None
                             if self.desktop_window:
-                                _dw = self.desktop_window[0]
-                                if _dw != event.window:
-                                    _desktop_win = _dw
-                            if _desktop_win:
-                                event.window.configure(stack_mode=X.Below, sibling=_desktop_win)
-                            else:
-                                event.window.configure(stack_mode=X.Below)
+                                if len(self.desktop_window) > 1:
+                                    if self.desktop_window[0] != event.window:
+                                        event.window.configure(stack_mode=X.Below)
+                                        self.desktop_window[0].configure(stack_mode=X.Below)
+                                else:
+                                    event.window.configure(stack_mode=X.Below)
+                            #
                             self.display.sync()
                             event.window.map()
                         #
@@ -2435,6 +2434,22 @@ class x_wm:
         #
         if not win:
             return
+        ##### fixed size window
+        # _minw = 0
+        # _maxw = 0
+        # _minh = 0
+        # _maxh = 0
+        try:
+            _normal_hints = win.get_wm_normal_hints()
+            if hasattr(_normal_hints, 'max_height'):
+                _minw = _normal_hints['min_width']
+                _maxw = _normal_hints['max_width']
+                _minh = _normal_hints['min_height']
+                _maxh = _normal_hints['max_height']
+                if _minw == _maxw and _minh == _maxh:
+                    return
+        except:
+            pass
         #
         if not win in self.MAXIMIZED_WINDOWS:
             wgeom = win.get_geometry()
