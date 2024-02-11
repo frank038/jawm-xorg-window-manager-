@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# v. 20240210
+# v. 20240211
 
 ##############
 ##### OPTIONS
@@ -41,16 +41,16 @@ _EXIT = "e"
 _TERMINAL = "xterm"
 
 # command 1 - key 1
-COMM_1 = ""
+COMM_1 = "qterminal"
 
 # command 2 - key 2
-COMM_2 = ""
+COMM_2 = "file-roller"
 
 # command 3 - key 3
-COMM_3 = ""
+COMM_3 = "yad-icon-browser"
 
 # command 4 - key 4
-COMM_4 = ""
+COMM_4 = "tint2"
 
 # resize with Super+right mouse button: 0 no - 1 yes
 RESIZE_WITH_KEY = 1
@@ -581,7 +581,7 @@ class x_wm:
                             self.active_window.set_wm_state(state = Xutil.NormalState, icon = X.NONE)
                     else:
                         self.active_window.set_input_focus(X.RevertToPointerRoot, X.CurrentTime)
-                        # Xutil.WithdrawnState, Xutil.NormalState, Xutil.IconicState
+                        Xutil.WithdrawnState, Xutil.NormalState, Xutil.IconicState
                         self.active_window.set_wm_state(state = Xutil.NormalState, icon = X.NONE)
                     self.display.sync()
                     #
@@ -645,7 +645,8 @@ class x_wm:
                     if not pwin in self.windows_group:
                         self.windows_group[pwin] = [event.window]
                     else:
-                        self.windows_group[pwin].append(event.window)
+                        if not event.window in self.windows_group[pwin]:
+                            self.windows_group[pwin].append(event.window)
                 #
                 ew_type = None
                 #
@@ -657,11 +658,12 @@ class x_wm:
                 #
                 if ew_type:
                     if ew_type[0] in WINDOWS_WITH_NO_DECO:
-                        # win_geom = event.window.get_geometry()
-                        # x = max(win_geom.x, start_x)
-                        # y = max(win_geom.y, start_y)
-                        # event.window.configure(x=x, y=y+50)
+                        win_geom = event.window.get_geometry()
+                        x = max(win_geom.x, start_x)
+                        y = max(win_geom.y, start_y)
+                        event.window.configure(x=x, y=y)
                         event.window.map()
+                        event.window.raise_window()
                         continue
                     # dock desktop splash notification
                     elif ew_type[0] in WINDOWS_MAPPED_WITH_NO_DECO:
@@ -758,6 +760,13 @@ class x_wm:
                 if not event.window:
                     continue
                 if event.window in self.DECO_WIN:
+                    # gimp color chooser workaround: is the only unmapping state a meaningfull state?
+                    # can brake other things
+                    if ew_type[0] == "_NET_WM_WINDOW_TYPE_DIALOG":
+                        if self.DECO_WIN[event.window]:
+                            self.DECO_WIN[event.window].map()
+                            self.DECO_WIN[event.window].raise_window()
+                            event.window.raise_window()
                     continue
                 # remove the border from the program
                 event.window.change_attributes(
@@ -901,6 +910,8 @@ class x_wm:
             #
             # first unmap then destroy eventually
             elif event.type == X.DestroyNotify:
+                if event.window == self.root or event.window == None:
+                    continue
                 # window_group hint
                 _witem = None
                 for witem in self.windows_group:
@@ -1632,10 +1643,13 @@ class x_wm:
                             self.maximize_window(event.window)
                     #
                     elif fmt == 32 and data[1] == self.WM_HIDDEN:
-                        if data[0] == 2 or data[0] == 1:
-                            self.minimize_window(event.window, data[0])
+                        # hidden: 1 to hide (code 11) and 2 (code 22) to toggle - 0 (code 10) to unhide
+                        if data[0] == 1:
+                            self.minimize_window(event.window, 11)
+                        elif data[0] == 2:
+                            self.minimize_window(event.window, 22)
                         elif data[0] == 0:
-                            self.minimize_window(event.window, data[0])
+                            self.minimize_window(event.window, 10)
                     # fullscreen
                     elif fmt == 32 and data[1] == self.WM_FULLSCREEN:
                         # if data[0] == 2:
@@ -1760,113 +1774,121 @@ class x_wm:
                     # # elif ALWAYS_CENTERED == 1:
                         # # x = int((screen_width_usable-win_geom.width)/2)
                         # # y = int((screen_height_usable-win_geom.height)/2)
-                # ######## 
+                # ################################ here
                 
-                # # mask |= XCB_CONFIG_WINDOW_X;
-                # # mask |= XCB_CONFIG_WINDOW_Y;
-                # # mask |= XCB_CONFIG_WINDOW_WIDTH;
-                # # mask |= XCB_CONFIG_WINDOW_HEIGHT;
-                # # XCB_STACK_MODE_ABOVE
-                #
-                window = event.window
-                x = max(event.x, start_x)
-                y = max(event.y, start_y)
-                #
-                ew_type = None
-                ew_type = self.get_window_type(event.window)
-                if ew_type and ew_type != 1:
-                    ew_name = self.display.get_atom_name(ew_type[0])
-                    if ew_name == '_NET_WM_WINDOW_TYPE_DOCK':
-                        x = event.x
-                        y = event.y
-                    elif ew_name == '_NET_WM_WINDOW_TYPE_DESKTOP':
-                        x = event.x
-                        y = event.y
-                #
-                width, height = event.width, event.height
-                #
-                if NO_DECO == 1:
-                    window.configure(x=x, y=y, width=width, height=height)
-                    continue
-                #
-                # y += TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2
-                window.configure(x=x, y=y, width=width, height=height)
-                if window in self.DECO_WIN:
-                    if self.DECO_WIN[window]:
-                        # #
-                        # # # window restore from fullscreen state
-                        # if self.window_in_fullscreen_state:
-                            # if event.window == self.window_in_fullscreen_state[0]:
-                                # if event.sequence_number == self.window_in_fullscreen_state[1]:
-                                    # continue
-                                # if width == screen_width and height == screen_height:
-                                    # self.window_in_fullscreen_state = []
-                                    # continue
-                                # #
-                                # event.window.configure(x=x, y=y, width=width, height=height)
-                                # if self.DECO_WIN[event.window]:
+                # # # mask |= XCB_CONFIG_WINDOW_X;
+                # # # mask |= XCB_CONFIG_WINDOW_Y;
+                # # # mask |= XCB_CONFIG_WINDOW_WIDTH;
+                # # # mask |= XCB_CONFIG_WINDOW_HEIGHT;
+                # # # XCB_STACK_MODE_ABOVE
+                # #
+                # window = event.window
+                # x = max(event.x, start_x)
+                # y = max(event.y, start_y)
+                # #
+                # ew_type = None
+                # ew_type = self.get_window_type(event.window)
+                # if ew_type and ew_type != 1:
+                    # ew_name = self.display.get_atom_name(ew_type[0])
+                    # if ew_name == '_NET_WM_WINDOW_TYPE_DOCK':
+                        # x = event.x
+                        # y = event.y
+                    # elif ew_name == '_NET_WM_WINDOW_TYPE_DESKTOP':
+                        # x = event.x
+                        # y = event.y
+                # #
+                # width, height = event.width, event.height
+                # #
+                # if NO_DECO == 1:
+                    # window.configure(x=x, y=y, width=width, height=height)
+                    # continue
+                # #
+                # # y += TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2
+                # window.configure(x=x, y=y, width=width, height=height)
+                # if window in self.DECO_WIN:
+                    # if self.DECO_WIN[window]:
+                        # # #
+                        # # # # window restore from fullscreen state
+                        # # if self.window_in_fullscreen_state:
+                            # # if event.window == self.window_in_fullscreen_state[0]:
+                                # # if event.sequence_number == self.window_in_fullscreen_state[1]:
+                                    # # continue
+                                # # if width == screen_width and height == screen_height:
+                                    # # self.window_in_fullscreen_state = []
+                                    # # continue
+                                # # #
+                                # # event.window.configure(x=x, y=y, width=width, height=height)
+                                # # if self.DECO_WIN[event.window]:
+                                    # # # self.DECO_WIN[event.window].map()
+                                    # # self.DECO_WIN[event.window].raise_window()
+                                # # #
+                                # # event.window.raise_window()
+                                # # if self.DECO_WIN[event.window]:
                                     # # self.DECO_WIN[event.window].map()
-                                    # self.DECO_WIN[event.window].raise_window()
-                                # #
-                                # event.window.raise_window()
-                                # if self.DECO_WIN[event.window]:
-                                    # self.DECO_WIN[event.window].map()
-                                # #
-                                # # self.window_in_fullscreen_state = []
-                                # continue
-                        # #
-                        # # into fullscreen
-                        # if width == screen_width and height == screen_height:
-                            # if self.window_in_fullscreen_state_CM:
-                                # continue
-                            # # skip unwanted request - mpv
-                            # if self.window_in_fullscreen_state:
-                                # if event.window == self.window_in_fullscreen_state[0]:
-                                    # continue
-                            # #######
-                            # if event.window in self.DECO_WIN:
-                                # if self.DECO_WIN[event.window]:
-                                    # self.DECO_WIN[event.window].unmap()
-                            # event.window.raise_window()
-                            # event.window.configure(x=0, y=0, width=screen_width, height=screen_height)
-                            # self.window_in_fullscreen_state = [event.window, event.sequence_number]
-                            # continue
-                        # #
-                        # else:
-                            #
-                        self.DECO_WIN[event.window].configure(x=x-BORDER_WIDTH-BORDER_WIDTH2, y=y-TITLE_HEIGHT-BORDER_WIDTH-BORDER_WIDTH2, 
-                                width=width+BORDER_WIDTH+BORDER_WIDTH2, height=height+TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2)
-                # #
+                                # # #
+                                # # # self.window_in_fullscreen_state = []
+                                # # continue
+                        # # #
+                        # # # into fullscreen
+                        # # if width == screen_width and height == screen_height:
+                            # # if self.window_in_fullscreen_state_CM:
+                                # # continue
+                            # # # skip unwanted request - mpv
+                            # # if self.window_in_fullscreen_state:
+                                # # if event.window == self.window_in_fullscreen_state[0]:
+                                    # # continue
+                            # # #######
+                            # # if event.window in self.DECO_WIN:
+                                # # if self.DECO_WIN[event.window]:
+                                    # # self.DECO_WIN[event.window].unmap()
+                            # # event.window.raise_window()
+                            # # event.window.configure(x=0, y=0, width=screen_width, height=screen_height)
+                            # # self.window_in_fullscreen_state = [event.window, event.sequence_number]
+                            # # continue
+                        # # #
+                        # # else:
+                            # #
+                        # self.DECO_WIN[event.window].configure(x=x-BORDER_WIDTH-BORDER_WIDTH2, y=y-TITLE_HEIGHT-BORDER_WIDTH-BORDER_WIDTH2, 
+                                # width=width+BORDER_WIDTH+BORDER_WIDTH2, height=height+TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2)
                 # continue
-                # #
-                # mask = event.value_mask
-                # if mask == 0b1111:
+                ################################## end here
+                # it works
+                x = event.x
+                y = event.y
+                width, height = event.width, event.height
+                mask = event.value_mask
+                if mask == 0b1111:
+                    event.window.configure(x=x, y=y, width=width, height=height)
+                    if event.window in self.DECO_WIN:
+                        if self.DECO_WIN[event.window]:
+                            self.DECO_WIN[event.window].configure(x=x-BORDER_WIDTH-BORDER_WIDTH2, y=y-TITLE_HEIGHT-BORDER_WIDTH-BORDER_WIDTH2, 
+                                    width=width+BORDER_WIDTH+BORDER_WIDTH2, height=height+TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2)
+                    self.display.sync()
+                elif mask == 0b1100:
+                    event.window.configure(width=width, height=height)
+                    if event.window in self.DECO_WIN:
+                        if self.DECO_WIN[event.window]:
+                            self.DECO_WIN[event.window].configure(width=width+BORDER_WIDTH+BORDER_WIDTH2, height=height+TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2)
+                    self.display.sync()
+                elif mask == 0b0011:
+                    event.window.configure(x=x, y=y)
+                    if event.window in self.DECO_WIN:
+                        if self.DECO_WIN[event.window]:
+                            self.DECO_WIN[event.window].configure(x=x-BORDER_WIDTH-BORDER_WIDTH2, y=y-TITLE_HEIGHT-BORDER_WIDTH-BORDER_WIDTH2)
+                    self.display.sync()
+                elif mask == 0b01000000:
+                    event.window.configure(event.stack_mode)
+                    self.display.sync()
                     # event.window.configure(x=x, y=y, width=width, height=height)
                     # if event.window in self.DECO_WIN:
                         # if self.DECO_WIN[event.window]:
                             # self.DECO_WIN[event.window].configure(x=x-BORDER_WIDTH-BORDER_WIDTH2, y=y-TITLE_HEIGHT-BORDER_WIDTH-BORDER_WIDTH2, 
                                     # width=width+BORDER_WIDTH+BORDER_WIDTH2, height=height+TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2)
-                # elif mask == 0b1100:
-                    # event.window.configure(width=width, height=height)
-                    # if event.window in self.DECO_WIN:
-                        # if self.DECO_WIN[event.window]:
-                            # self.DECO_WIN[event.window].configure(width=width+BORDER_WIDTH+BORDER_WIDTH2, height=height+TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2)
-                # elif mask == 0b0011:
-                    # event.window.configure(x=x, y=y)
-                    # if event.window in self.DECO_WIN:
-                        # if self.DECO_WIN[event.window]:
-                            # self.DECO_WIN[event.window].configure(x=x-BORDER_WIDTH-BORDER_WIDTH2, y=y-TITLE_HEIGHT-BORDER_WIDTH-BORDER_WIDTH2)
-                # elif mask == 0b01000000:
-                    # #window.configure(event.stack_mode)
-                    # event.window.configure(x=x, y=y, width=width, height=height)
-                    # if event.window in self.DECO_WIN:
-                        # if self.DECO_WIN[event.window]:
-                            # self.DECO_WIN[event.window].configure(x=x-BORDER_WIDTH-BORDER_WIDTH2, y=y-TITLE_HEIGHT-BORDER_WIDTH-BORDER_WIDTH2, 
-                                    # width=width+BORDER_WIDTH+BORDER_WIDTH2, height=height+TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2)
-                # #
-                # continue
-                # #
-                # ######################
+                    # self.display.sync()
+                # 
+                continue
+                #
+                ###################### end
                 # window = event.window
                 # x, y = event.x, event.y
                 # width, height = event.width, event.height
@@ -1922,6 +1944,7 @@ class x_wm:
                                     # width=width+BORDER_WIDTH+BORDER_WIDTH2, height=height+TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2)
                                 # #
                                 # continue
+                # ##################### end
             #
             if not _is_running:
                 return
@@ -2161,7 +2184,7 @@ class x_wm:
             #
             if dwin:
                 dwin.change_attributes(border_pixel=border_color1)
-                dwin.ungrab_button(1, X.AnyModifier)
+                # dwin.ungrab_button(1, X.AnyModifier)
                 self.display.sync()
             else:
                 self.active_window.change_attributes(border_pixel=border_color1)
@@ -2309,10 +2332,17 @@ class x_wm:
                 self._update_active_window(X.NONE)
                         
     
-    # windows in miniimized state: window:[deco]
+    # windows in minimized state: window:[deco]
     def minimize_window(self, win, ttype):
+        #######
+        # 3 keyboard action minimize the active window or from the minimize button
+        # 77 eventually unminimize before activating a new window
+        # WithdrawnState 0 - NormalState 1 - IconicState 3
+        # hidden: 1 to hide (code 11) and 2 (code 22) to toggle - 0 (code 10) to unhide
+        #######
         # minimize
-        if ttype == 3 or ttype == 0 or ttype == 2 or ttype == 1:
+        # if ttype == 3 or ttype == 2 or ttype == 1:
+        if ttype == 3 or ttype == 0 or ttype == 11 or ttype == 22:
             if not win in self.MINIMIZED_WINDOWS:
                 if win in self.DECO_WIN:
                     deco = self.DECO_WIN[win]
@@ -2344,81 +2374,87 @@ class x_wm:
                         self._find_and_update_the_active(win)
                     return
         # unminimize
-        if ttype == 1 or ttype == 2 or ttype == 3 or ttype == 77:
+        # if ttype == 1 or ttype == 2 or ttype == 3 or ttype == 77:
+        if ttype == 0 or ttype == 10 or ttype == 77:
+            deco = None
             if win in self.MINIMIZED_WINDOWS:
                 deco = self.MINIMIZED_WINDOWS[win]
-                if deco:
-                    # deco.map()
-                    deco.raise_window()
-                    # self.display.sync()
-                    # self.display.flush()
-                win.map()
-                win.raise_window()
-                if deco:
-                    deco.map()
-                # Xutil.WithdrawnState, Xutil.NormalState, Xutil.IconicState
-                win.set_wm_state(state = Xutil.NormalState, icon = X.NONE)
-                # self.display.sync()
-                # set the hidden state
-                win.change_property(
-                    self.NET_WM_STATE,
-                    self.WM_HIDDEN,
-                    32,
-                    [0],
-                    X.PropModeReplace)
-                self.display.sync()
-                #
-                del self.MINIMIZED_WINDOWS[win]
-                # old active window
-                if self.active_window:
-                    if self.active_window in self.DECO_WIN:
-                        if self.DECO_WIN[self.active_window]:
-                            self.DECO_WIN[self.active_window].change_attributes(border_pixel=border_color2)
-                            #
-                            self.active_window.grab_button(1, X.AnyModifier, True,
-                                                X.ButtonPressMask, X.GrabModeAsync,
-                                                X.GrabModeAsync, X.NONE, X.NONE)
-                        else:
-                            self.active_window.grab_button(1, X.AnyModifier, True,
-                                                X.ButtonPressMask, X.GrabModeAsync,
-                                                X.GrabModeAsync, X.NONE, X.NONE)
-                            self.active_window.change_attributes(border_pixel=border_color2)
-                # new active window
-                if self.DECO_WIN[win]:
-                    self.DECO_WIN[win].change_attributes(border_pixel=border_color1)
-                    #self.display.flush()
-                    # self.DECO_WIN[win].map()
-                    # self.DECO_WIN[win].raise_window()
-                else:
-                    win.change_attributes(border_pixel=border_color1)
-                self.display.flush()
-                #
-                win.ungrab_button(1, X.AnyModifier)
-                win.set_input_focus(X.RevertToPointerRoot, X.CurrentTime)
-                #
-                # win.map()
-                # win.raise_window()
-                #
-                self.display.sync()
-                #
-                if win in self.all_windows_stack:
-                    self.all_windows_stack.remove(win)
-                self.all_windows_stack.append(win)
-                self._update_client_list_stack()
-                #
-                self.active_window = win
-                self._update_active_window(self.active_window)
-                # its transient window
-                if self.active_window in self.transient_windows:
-                    w_tr = self.transient_windows[self.active_window]
-                    w_tr.map()
-                    w_tr.raise_window()
-                    self.display.sync()
-                # success
-                return 0
-            #
+            # failure - only for code 77
             else:
-                return 1
+                if ttype == 77:
+                    return 1
+            #
+            if deco:
+                # deco.map()
+                deco.raise_window()
+                # self.display.sync()
+                # self.display.flush()
+            win.map()
+            win.raise_window()
+            if deco:
+                deco.map()
+            # Xutil.WithdrawnState, Xutil.NormalState, Xutil.IconicState
+            win.set_wm_state(state = Xutil.NormalState, icon = X.NONE)
+            # self.display.sync()
+            # set the hidden state
+            win.change_property(
+                self.NET_WM_STATE,
+                self.WM_HIDDEN,
+                32,
+                [0],
+                X.PropModeReplace)
+            self.display.sync()
+            #
+            if win in self.MINIMIZED_WINDOWS:
+                del self.MINIMIZED_WINDOWS[win]
+            # old active window
+            if self.active_window:
+                if self.active_window in self.DECO_WIN:
+                    if self.DECO_WIN[self.active_window]:
+                        self.DECO_WIN[self.active_window].change_attributes(border_pixel=border_color2)
+                        #
+                        self.active_window.grab_button(1, X.AnyModifier, True,
+                                            X.ButtonPressMask, X.GrabModeAsync,
+                                            X.GrabModeAsync, X.NONE, X.NONE)
+                    else:
+                        self.active_window.grab_button(1, X.AnyModifier, True,
+                                            X.ButtonPressMask, X.GrabModeAsync,
+                                            X.GrabModeAsync, X.NONE, X.NONE)
+                        self.active_window.change_attributes(border_pixel=border_color2)
+            # new active window
+            if self.DECO_WIN[win]:
+                self.DECO_WIN[win].change_attributes(border_pixel=border_color1)
+                #self.display.flush()
+                # self.DECO_WIN[win].map()
+                # self.DECO_WIN[win].raise_window()
+            else:
+                win.change_attributes(border_pixel=border_color1)
+            self.display.flush()
+            #
+            win.ungrab_button(1, X.AnyModifier)
+            win.set_input_focus(X.RevertToPointerRoot, X.CurrentTime)
+            #
+            # win.map()
+            # win.raise_window()
+            #
+            self.display.sync()
+            #
+            if win in self.all_windows_stack:
+                self.all_windows_stack.remove(win)
+            self.all_windows_stack.append(win)
+            self._update_client_list_stack()
+            #
+            self.active_window = win
+            self._update_active_window(self.active_window)
+            # its transient window
+            if self.active_window in self.transient_windows:
+                w_tr = self.transient_windows[self.active_window]
+                w_tr.map()
+                w_tr.raise_window()
+                self.display.sync()
+            # success - only for code 77
+            return 0
+
                 
     # windows in maximized state: window:[prev_win_x, prev_win_y, win_unmaximized_width, win_unmaximized_height]
     def maximize_window(self, win2):
