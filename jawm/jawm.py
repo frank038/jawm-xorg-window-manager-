@@ -241,7 +241,7 @@ class x_wm:
         self.NET_STATE = self.display.intern_atom("_NET_STATE")
         self.NET_STATE_ABOVE = self.display.intern_atom("_NET_WM_STATE_ABOVE")
         self.NET_STATE_BELOW = self.display.intern_atom("_NET_WM_STATE_BELOW")
-        self.CHANGE_STATE = self.display.intern_atom("_NET_CHANGE_STATE")
+        # self.CHANGE_STATE = self.display.intern_atom("_NET_CHANGE_STATE")
         self.NET_WM_NAME = self.display.intern_atom('_NET_WM_NAME')
         self.WM_NAME = self.display.intern_atom('WM_NAME')
         self.WM_FULLSCREEN = self.display.intern_atom("_NET_WM_STATE_FULLSCREEN")
@@ -249,7 +249,7 @@ class x_wm:
         self.WM_MAXIMIZED_VERT = self.display.intern_atom("_NET_WM_STATE_MAXIMIZED_VERT")
         self.WM_HIDDEN = self.display.intern_atom("_NET_WM_STATE_HIDDEN")
         self.WM_CHANGE_STATE = self.display.intern_atom("WM_CHANGE_STATE")
-        self.WM_NET_CHANGE_STATE = self.display.intern_atom("_NET_WM_CHANGE_STATE")
+        # self.WM_NET_CHANGE_STATE = self.display.intern_atom("_NET_WM_CHANGE_STATE")
         self.NET_ACTIVE_WINDOW = self.display.intern_atom("_NET_ACTIVE_WINDOW")
         self.NET_LIST = self.display.intern_atom("_NET_CLIENT_LIST")
         self.NET_LIST_STACK = self.display.intern_atom("_NET_CLIENT_LIST_STACKING")
@@ -496,10 +496,16 @@ class x_wm:
                 if attrs is None:
                     continue
                 # decoration too
+                win = None
                 if attrs.override_redirect:
                     # find the window from decoration
                     win2 = self.find_win_of_deco(event.window)
                     if win2:
+                        continue
+                    else:
+                        continue
+                    #
+                    if not win:
                         continue
                 # skip if already present
                 if event.window in self.all_windows:
@@ -581,7 +587,7 @@ class x_wm:
                             self.active_window.set_wm_state(state = Xutil.NormalState, icon = X.NONE)
                     else:
                         self.active_window.set_input_focus(X.RevertToPointerRoot, X.CurrentTime)
-                        Xutil.WithdrawnState, Xutil.NormalState, Xutil.IconicState
+                        # Xutil.WithdrawnState, Xutil.NormalState, Xutil.IconicState
                         self.active_window.set_wm_state(state = Xutil.NormalState, icon = X.NONE)
                     self.display.sync()
                     #
