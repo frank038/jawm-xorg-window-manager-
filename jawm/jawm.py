@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# v. 20240211
+# v. 20240214
 
 ##############
 ##### OPTIONS
@@ -27,9 +27,6 @@ TITLEBAR_SIZE = 1
 
 # decoration color: buttons need to be recolored if changed
 DECO_COLOR = "#D2AE26"
-
-# notification position: 1 top - 2 bottom
-_NOTIFICATION_POS = 1
 
 # window manager actions: Super_L (win key) - Alt_l - Control_l
 _STATE = "Super_L"
@@ -119,6 +116,10 @@ SLOPPY_FOCUS = 1
 # windows always centered: 1 yes - 0 no
 # if 0, try to use application data before
 ALWAYS_CENTERED = 0
+
+
+# notification position: 1 top - 2 bottom
+_NOTIFICATION_POS = 1
 
 colormap = Display().screen().default_colormap
 win_color = colormap.alloc_named_color(DECO_COLOR).pixel
@@ -739,14 +740,16 @@ class x_wm:
                             #
                             self.display.sync()
                             event.window.map()
-                        #
+                        # position managed by the notification server
                         elif ew_type[0] == '_NET_WM_WINDOW_TYPE_NOTIFICATION':
                             ngeom = event.window.get_geometry()
-                            x = end_x - ngeom.width - 4
-                            if _NOTIFICATION_POS == 2:
-                                y = end_y - 4
-                            else:
-                                y = start_y + 4
+                            # x = end_x - ngeom.width - 4
+                            # if _NOTIFICATION_POS == 2:
+                                # y = end_y - 4
+                            # else:
+                                # y = start_y + 4
+                            x = max(start_x, ngeom.x)
+                            y = max(start_y, ngeom.y)
                             event.window.configure(x=x, y=y)
                             self.display.sync()
                             event.window.map()
@@ -1090,10 +1093,23 @@ class x_wm:
                     #
                     if not self.delta_drag_start_point:
                         continue
-                    #
+                    # do not go outside the top border
                     if self.mouse_button_left == 1:
-                        if (y - self.delta_drag_start_point[1]) <= start_y:
+                        if ddeco:
+                            ggeom = ddeco.get_geometry()
+                        else:
+                            ggeom = wwin.get_geometry()
+                        #
+                        if y <= self.delta_drag_start_point[1]+4:
+                            #
+                            if ddeco and wwin:
+                                ddeco.configure(x=x - self.delta_drag_start_point[0], y=start_y)
+                                wwin.configure(x=x - self.delta_drag_start_point[0] + BORDER_WIDTH+BORDER_WIDTH2, y=start_y+TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2)
+                            elif wwin:
+                                wwin.configure(x=x - self.delta_drag_start_point[0], y=start_y)
+                            #
                             continue
+                        
                     #
                     if ddeco and wwin:
                         ddeco.configure(x=x - self.delta_drag_start_point[0], y=y - self.delta_drag_start_point[1])
@@ -1279,6 +1295,10 @@ class x_wm:
                                     break
                         #
                         if wwin:
+                            # skip maximized window
+                            if wwin in self.MAXIMIZED_WINDOWS:
+                                continue
+                            #
                             self.grabbed_window_btn1 = wwin
                             if ddeco:
                                 self.grabbed_window_btn1 = ddeco
@@ -1312,6 +1332,10 @@ class x_wm:
                         # it could be transient
                         if not wwin:
                             continue
+                        # skip maximized window
+                        if wwin in self.MAXIMIZED_WINDOWS:
+                            continue
+                        #
                         dgeom = ddeco.get_geometry()
                         dpos = dgeom.root.translate_coords(ddeco.id, 0, 0)
                         dx = dpos.x
@@ -1389,6 +1413,10 @@ class x_wm:
                             ############## resizing - bottom right ###############
                             elif (cx+dw-40) <= ex <= (cx+dw):
                                 if (cy+dh-40) <= ey <= (cy+dh):
+                                    # skip maximized window
+                                    if wwin in self.MAXIMIZED_WINDOWS:
+                                        continue
+                                    #
                                     self.btn1_drag = ddeco
                                     self.grabbed_window_btn1 = ddeco
                                     self.mouse_button_left = 1
@@ -1404,6 +1432,10 @@ class x_wm:
                                 # skip window at back
                                 # TO DO: make wwin active and drag
                                 if wwin != self.active_window:
+                                    continue
+                                #
+                                # skip maximized window
+                                if wwin in self.MAXIMIZED_WINDOWS:
                                     continue
                                 #
                                 self.grabbed_window_btn1 = ddeco
