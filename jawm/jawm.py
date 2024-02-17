@@ -2342,7 +2342,8 @@ class x_wm:
             ### A2
             win.map()
             win.raise_window()
-            self.DECO_WIN[win].map()
+            if self.DECO_WIN[win]:
+                self.DECO_WIN[win].map()
             ###
             self.display.sync()
             #
