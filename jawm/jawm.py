@@ -547,10 +547,11 @@ class x_wm:
                                 X.ButtonPressMask|X.ButtonReleaseMask, X.GrabModeAsync,
                                 X.GrabModeAsync, X.NONE, X.NONE)
                             #
-                            if self.DECO_WIN[self.active_window]:
-                                self.DECO_WIN[self.active_window].change_attributes(border_pixel=border_color2)
-                            else:
-                                self.active_window.change_attributes(border_pixel=border_color2)
+                            if self.active_window in self.DECO_WIN:
+                                if self.DECO_WIN[self.active_window]:
+                                    self.DECO_WIN[self.active_window].change_attributes(border_pixel=border_color2)
+                                else:
+                                    self.active_window.change_attributes(border_pixel=border_color2)
                             # its transient
                             if self.active_window in self.transient_windows:
                                 self.transient_windows[self.active_window].change_attributes(border_pixel=border_color2)
@@ -565,10 +566,11 @@ class x_wm:
                         # the new active window
                         self.active_window = wwin
                         #
-                        if self.DECO_WIN[self.active_window]:
-                            self.DECO_WIN[self.active_window].change_attributes(border_pixel=border_color1)
-                        else:
-                            self.active_window.change_attributes(border_pixel=border_color1)
+                        if self.active_window in self.DECO_WIN:
+                            if self.DECO_WIN[self.active_window]:
+                                self.DECO_WIN[self.active_window].change_attributes(border_pixel=border_color1)
+                            else:
+                                self.active_window.change_attributes(border_pixel=border_color1)
                     #
                     self.all_windows.append(wwin)
                     self._update_client_list()
@@ -1001,12 +1003,13 @@ class x_wm:
                 #
                 if win:
                     # with decoration
-                    if self.DECO_WIN[win]:
-                        self.DECO_WIN[win].destroy()
-                        del self.DECO_WIN[win]
-                    # without decoration
-                    else:
-                        del self.DECO_WIN[win]
+                    if win in self.DECO_WIN:
+                        if self.DECO_WIN[win]:
+                            self.DECO_WIN[win].destroy()
+                            del self.DECO_WIN[win]
+                        # without decoration
+                        else:
+                            del self.DECO_WIN[win]
                     #
                     if win in self.all_windows:
                         self.all_windows.remove(win)
@@ -1904,16 +1907,6 @@ class x_wm:
             '_NET_WM_STATE',
             '_NET_WM_MOVERESIZE',
             '_NET_CLOSE_WINDOW',
-            '_NET_RESTACK_WINDOW',
-            '_NET_WM_ACTION_MOVE',
-            '_NET_WM_ACTION_RESIZE',
-            '_NET_WM_ACTION_MINIMIZE',
-            '_NET_WM_ACTION_MAXIMIZE_VERT',
-            '_NET_WM_ACTION_MAXIMIZE_HORZ',
-            '_NET_WM_ACTION_FULLSCREEN',
-            '_NET_WM_ACTION_ABOVE',
-            '_NET_WM_ACTION_BELOW',
-            '_NET_WM_ACTION_STICK',
             '_NET_WM_STRUT_PARTIAL',
             '_NET_WM_STRUT',
             '_NET_WM_STATE_FULLSCREEN',
@@ -1923,7 +1916,6 @@ class x_wm:
             '_NET_WM_STATE_BELOW',
             '_NET_SUPPORTING_WM_CHECK',
             '_NET_WM_ACTION_CLOSE',
-            '_NET_WM_ALLOWED_ACTIONS',
             '_NET_WM_ICON',
             '_NET_WM_NAME',
             '_NET_WM_PID',
@@ -2052,6 +2044,8 @@ class x_wm:
     
     # activate the window by request - win deco type
     def _activate_window(self, win, dwin, _type):
+        if win == self.active_window:
+            return
         #
         if win and win in self.all_windows:
             # the old active window
@@ -2293,16 +2287,17 @@ class x_wm:
             else:
                 if ttype == 77:
                     return 1
-            #
-            if deco:
+            ### A1
+            # if deco:
+                # # deco.map()
+                # deco.raise_window()
+                # # self.display.sync()
+                # # self.display.flush()
+            # win.map()
+            # win.raise_window()
+            # if deco:
                 # deco.map()
-                deco.raise_window()
-                # self.display.sync()
-                # self.display.flush()
-            win.map()
-            win.raise_window()
-            if deco:
-                deco.map()
+            ###
             # Xutil.WithdrawnState, Xutil.NormalState, Xutil.IconicState
             win.set_wm_state(state = Xutil.NormalState, icon = X.NONE)
             # self.display.sync()
@@ -2332,21 +2327,23 @@ class x_wm:
                                             X.GrabModeAsync, X.NONE, X.NONE)
                         self.active_window.change_attributes(border_pixel=border_color2)
             # new active window
-            if self.DECO_WIN[win]:
-                self.DECO_WIN[win].change_attributes(border_pixel=border_color1)
-                # self.display.flush()
-                # self.DECO_WIN[win].map()
-                # self.DECO_WIN[win].raise_window()
-            else:
-                win.change_attributes(border_pixel=border_color1)
-            self.display.flush()
+            if win in self.DECO_WIN:
+                if self.DECO_WIN[win]:
+                    self.DECO_WIN[win].change_attributes(border_pixel=border_color1)
+                    # self.display.flush()
+                    # self.DECO_WIN[win].map()
+                    self.DECO_WIN[win].raise_window()
+                else:
+                    win.change_attributes(border_pixel=border_color1)
+                self.display.flush()
             #
             win.ungrab_button(1, X.AnyModifier)
             win.set_input_focus(X.RevertToPointerRoot, X.CurrentTime)
-            #
-            # win.map()
-            # win.raise_window()
-            #
+            ### A2
+            win.map()
+            win.raise_window()
+            self.DECO_WIN[win].map()
+            ###
             self.display.sync()
             #
             if win in self.all_windows_stack:
