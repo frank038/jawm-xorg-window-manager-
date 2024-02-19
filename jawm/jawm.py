@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# v. 20240217
+# v. 20240219
 
 ##############
 ##### OPTIONS
@@ -242,6 +242,7 @@ class x_wm:
         self.NET_STATE = self.display.intern_atom("_NET_STATE")
         self.NET_STATE_ABOVE = self.display.intern_atom("_NET_WM_STATE_ABOVE")
         self.NET_STATE_BELOW = self.display.intern_atom("_NET_WM_STATE_BELOW")
+        self.NET_STATE_MODAL = self.display.intern_atom("_NET_WM_STATE_MODAL")
         # self.CHANGE_STATE = self.display.intern_atom("_NET_CHANGE_STATE")
         self.NET_WM_NAME = self.display.intern_atom('_NET_WM_NAME')
         self.WM_NAME = self.display.intern_atom('WM_NAME')
@@ -252,13 +253,14 @@ class x_wm:
         self.WM_CHANGE_STATE = self.display.intern_atom("WM_CHANGE_STATE")
         # self.WM_NET_CHANGE_STATE = self.display.intern_atom("_NET_WM_CHANGE_STATE")
         self.NET_ACTIVE_WINDOW = self.display.intern_atom("_NET_ACTIVE_WINDOW")
+        self.WM_TRANSIENT = self.display.intern_atom("WM_TRANSIENT_FOR")
         self.NET_LIST = self.display.intern_atom("_NET_CLIENT_LIST")
         self.NET_LIST_STACK = self.display.intern_atom("_NET_CLIENT_LIST_STACKING")
         self.STATE_DEMANDS_ATTENTION = self.display.intern_atom("_NET_WM_STATE_DEMANDS_ATTENTION")
         self.WM_S = self.display.intern_atom('WM_S0')
-        #
+        # | X.FocusChangeMask
         mask = (X.SubstructureRedirectMask | X.SubstructureNotifyMask
-                | X.EnterWindowMask | X.LeaveWindowMask | X.FocusChangeMask
+                | X.EnterWindowMask | X.LeaveWindowMask
                 | X.ButtonPressMask | X.ButtonReleaseMask | X.PropertyChangeMask
                 | X.KeyPressMask | X.KeyReleaseMask)
         #
@@ -301,6 +303,8 @@ class x_wm:
         # 
         self.window_resize_geometry = None
         self.mouse_button_resize_drag_start_point = None
+        # resize window direction code
+        self.resize_window_code = -1
         # the window or the decoration when a key is been pressed
         self.key_press_window = None
         # the window that has the pointer in
@@ -529,7 +533,7 @@ class x_wm:
                     if ew_type[0] in WINDOWS_MAPPED_WITH_NO_DECO:
                         continue
                 # check if this window is a transient one
-                w_is_transient = event.window.get_full_property(self.display.get_atom("WM_TRANSIENT_FOR"), X.AnyPropertyType)
+                w_is_transient = event.window.get_full_property(self.WM_TRANSIENT, X.AnyPropertyType)
                 if w_is_transient:
                     event.window.set_input_focus(X.RevertToParent, 0)
                     continue
@@ -628,9 +632,10 @@ class x_wm:
                 _is_transient = None
                 prop = None
                 try:
-                    prop = event.window.get_full_property(self.display.get_atom("WM_TRANSIENT_FOR"), X.AnyPropertyType)
+                    prop = event.window.get_full_property(self.WM_TRANSIENT, X.AnyPropertyType)
                 except:
                     pass
+                #
                 if prop:
                     w_id = prop.value.tolist()[0]
                     #
@@ -639,6 +644,45 @@ class x_wm:
                             self.transient_windows[win] = event.window
                             _is_transient = win
                             break
+                    # remove transient property
+                    if _is_transient == None:
+                        event.window.delete_property(
+                            self.WM_TRANSIENT,
+                            )
+                #
+                ##########
+                # _is_above = 0
+                # _is_below = 0
+                _is_modal = 0
+                mprop = event.window.get_full_property(self.NET_WM_STATE, X.AnyPropertyType)#, sizehint = 10000)
+                if mprop:
+                    mvalue = mprop.value[0]
+                    # if self.NET_STATE_ABOVE == mvalue:
+                        # _is_above = 1
+                    # elif self.NET_STATE_BELOW == mvalue:
+                        # _is_below = 1
+                    if self.NET_STATE_MODAL == mvalue:
+                        _is_modal = 1
+                #
+                # if _is_modal:
+                    # if _is_transient == 0:
+                        # w_id = mprop.value.tolist()[0]
+                        # #
+                        # for win in self.DECO_WIN:
+                            # if win.id == w_id:
+                                # self.transient_windows[win] = event.window
+                                # _is_transient = win
+                                # _is_modal = 0
+                                # break
+                # delete this property - cannot be managed
+                if _is_modal:
+                    event.window.delete_property(
+                        self.NET_WM_STATE,
+                        )
+                    self.display.sync()
+                    _is_modal = 0
+                #
+                ##########
                 #
                 attrs = event.window.get_attributes()
                 if attrs is None:
@@ -773,7 +817,7 @@ class x_wm:
                 if not event.window:
                     continue
                 if event.window in self.DECO_WIN:
-                    # gimp color chooser workaround: is the only unmapping state a meaningfull state?
+                    # gimp color chooser workaround: is the only unmapped state a meaningfull state?
                     # can brake other things
                     if ew_type[0] == "_NET_WM_WINDOW_TYPE_DIALOG":
                         if self.DECO_WIN[event.window]:
@@ -795,7 +839,7 @@ class x_wm:
                     x = int((par_win_geom.width-win_geom.width)/2+par_win_geom.x)
                     y = int((par_win_geom.height-win_geom.height+TITLE_HEIGHT/2)/2+par_win_geom.y)
                     # always in the screen
-                    if (x + win_geom.width) > screen_width_usable or (y + win_geom.height) > screen_height_usable:
+                    if (x + win_geom.width) > screen_width_usable or (y + win_geom.height) > screen_height_usable or x < start_x or y < start_y:
                         x = int((screen_width_usable-win_geom.width)/2)
                         y = int((screen_height_usable-win_geom.height)/2)
                 else:
@@ -817,7 +861,7 @@ class x_wm:
                 if _is_transient:
                     # add the border
                     event.window.change_attributes(border_pixel=border_color2, border_width=BORDER_WIDTH)
-                    event.window.configure(border_width=BORDER_WIDTH)
+                    event.window.configure(border_width=BORDER_WIDTH2)
                     #
                     mask = X.EnterWindowMask
                     event.window.change_attributes(event_mask=mask)
@@ -1032,11 +1076,10 @@ class x_wm:
                     continue
                 # skip undecorated maximized windows
                 if event.window in self.DECO_WIN:
-                    #
                     if self.DECO_WIN[event.window] == None and event.window in self.MAXIMIZED_WINDOWS:
                         continue
                     #
-                #### window resizing
+                #### window resizing with left mouse button
                 if self.mouse_button_left and self.btn1_drag:
                     if not self.delta_drag_start_point:
                         continue
@@ -1059,28 +1102,124 @@ class x_wm:
                     dx = dgeom.x
                     dy = dgeom.y
                     #
-                    # right
-                    if self.mouse_button_left == 1:
-                        ww = self.window_resize_geometry[2] + (x-self.mouse_button_resize_drag_start_point[0])
-                        hh = self.window_resize_geometry[3] + (y-self.mouse_button_resize_drag_start_point[1])
-                        #
-                        # min size of the window
-                        if ww > 75 or hh > 75:
-                            if ddeco:
-                                ddeco.configure(width=ww, height=hh)
-                                wwin.configure(width=ww-BORDER_WIDTH*2, height=hh-BORDER_WIDTH*2-TITLE_HEIGHT)
-                            elif wwin:
-                                wwin.configure(width=ww, height=hh)
+                    xx = x - self.mouse_button_resize_drag_start_point[0]
                     #
-                    # # left
-                            # ww = self.window_resize_geometry[2] + (x-self.mouse_button_resize_drag_start_point[0])
-                            # hh = self.window_resize_geometry[3] + (y-self.mouse_button_resize_drag_start_point[1])
-                            # #
-                            # # min size
-                            # if ww > 75 or hh > 75:
-                                # if deco:
-                                    # deco.configure(x=x-ww ,y=y+hh, width=ww, height=hh)
-                                    # # win.configure(width=ww-BORDER_WIDTH*2, height=hh-BORDER_WIDTH*2-TITLE_HEIGHT)
+                    yy = y - self.mouse_button_resize_drag_start_point[1]
+                    #
+                    if ddeco:
+                        dgeom = ddeco.get_geometry()
+                    elif wwin:
+                        dgeom = wwin.get_geometry()
+                    #
+                    if self.mouse_button_left == 1:
+                        # bottom right - little shift to bottom-right
+                        if self.resize_window_code == 4:
+                            x2 = self.window_resize_geometry[0]
+                            y2 = self.window_resize_geometry[1]
+                            w2 = self.window_resize_geometry[2]+xx
+                            h2 = self.window_resize_geometry[3]+yy
+                            #
+                            # min size of the window
+                            if w2 > 75 and h2 > 75:
+                                if ddeco:
+                                    ddeco.configure(x=x2, y=y2, width=w2, height=h2)
+                                    wwin.configure(x=x2+BORDER_WIDTH+BORDER_WIDTH2, y=y2+BORDER_WIDTH+BORDER_WIDTH2+TITLE_HEIGHT, width=w2-BORDER_WIDTH*2, height=h2-BORDER_WIDTH*2-TITLE_HEIGHT)
+                                elif wwin:
+                                    wwin.configure(x=x2, y=y2, width=w2, height=h2)
+                        #
+                        # top right
+                        elif self.resize_window_code == 2:
+                            x2 = self.window_resize_geometry[0]
+                            y2 = self.window_resize_geometry[1]+yy
+                            w2 = self.window_resize_geometry[2]+xx
+                            h2 = self.window_resize_geometry[3]-yy
+                            #
+                            # min size of the window
+                            if w2 > 75 and h2 > 75:
+                                if ddeco:
+                                    ddeco.configure(x=x2, y=y2, width=w2, height=h2)
+                                    wwin.configure(x=x2+BORDER_WIDTH+BORDER_WIDTH2, y=y2+BORDER_WIDTH+BORDER_WIDTH2+TITLE_HEIGHT, width=w2-BORDER_WIDTH*2, height=h2-BORDER_WIDTH*2-TITLE_HEIGHT)
+                                elif wwin:
+                                    wwin.configure(x=x2, y=y2, width=w2, height=h2)
+                        # bottom left
+                        elif self.resize_window_code == 6:
+                            x2 = self.window_resize_geometry[0]+xx
+                            y2 = self.window_resize_geometry[1]
+                            w2 = self.window_resize_geometry[2]-xx
+                            h2 = self.window_resize_geometry[3]+yy
+                            # min size of the window
+                            if w2 > 75 and h2 > 75:
+                                if ddeco:
+                                    ddeco.configure(x=x2, y=y2, width=w2, height=h2)
+                                    wwin.configure(x=x2+BORDER_WIDTH+BORDER_WIDTH2, y=y2+BORDER_WIDTH+BORDER_WIDTH2+TITLE_HEIGHT, width=w2-BORDER_WIDTH*2, height=h2-BORDER_WIDTH*2-TITLE_HEIGHT)
+                                elif wwin:
+                                    wwin.configure(x=x2, y=y2, width=w2, height=h2)
+                            #
+                        # top left
+                        elif self.resize_window_code == 0:
+                            x2 = self.window_resize_geometry[0]+xx
+                            y2 = self.window_resize_geometry[1]+yy
+                            w2 = self.window_resize_geometry[2]-xx
+                            h2 = self.window_resize_geometry[3]-yy
+                            # min size of the window
+                            if w2 > 75 and h2 > 75:
+                                if ddeco:
+                                    ddeco.configure(x=x2, y=y2, width=w2, height=h2)
+                                    wwin.configure(x=x2+BORDER_WIDTH+BORDER_WIDTH2, y=y2+BORDER_WIDTH+BORDER_WIDTH2+TITLE_HEIGHT, width=w2-BORDER_WIDTH*2, height=h2-BORDER_WIDTH*2-TITLE_HEIGHT)
+                                elif wwin:
+                                    wwin.configure(x=x2, y=y2, width=w2, height=h2)
+                        # left
+                        elif self.resize_window_code == 7:
+                            x2 = self.window_resize_geometry[0]+xx
+                            y2 = self.window_resize_geometry[1]
+                            w2 = self.window_resize_geometry[2]-xx
+                            h2 = self.window_resize_geometry[3]
+                            # min size of the window
+                            if w2 > 75 and h2 > 75:
+                                if ddeco:
+                                    ddeco.configure(x=x2, y=y2, width=w2, height=h2)
+                                    wwin.configure(x=x2+BORDER_WIDTH+BORDER_WIDTH2, y=y2+BORDER_WIDTH+BORDER_WIDTH2+TITLE_HEIGHT, width=w2-BORDER_WIDTH*2, height=h2-BORDER_WIDTH*2-TITLE_HEIGHT)
+                                elif wwin:
+                                    wwin.configure(x=x2, y=y2, width=w2, height=h2)
+                        # right
+                        elif self.resize_window_code == 3:
+                            x2 = self.window_resize_geometry[0]
+                            y2 = self.window_resize_geometry[1]
+                            w2 = self.window_resize_geometry[2]+xx
+                            h2 = self.window_resize_geometry[3]
+                            # min size of the window
+                            if w2 > 75 and h2 > 75:
+                                if ddeco:
+                                    ddeco.configure(x=x2, y=y2, width=w2, height=h2)
+                                    wwin.configure(x=x2+BORDER_WIDTH+BORDER_WIDTH2, y=y2+BORDER_WIDTH+BORDER_WIDTH2+TITLE_HEIGHT, width=w2-BORDER_WIDTH*2, height=h2-BORDER_WIDTH*2-TITLE_HEIGHT)
+                                elif wwin:
+                                    wwin.configure(x=x2, y=y2, width=w2, height=h2)
+                        # bottom
+                        elif self.resize_window_code == 5:
+                            x2 = self.window_resize_geometry[0]
+                            y2 = self.window_resize_geometry[1]
+                            w2 = self.window_resize_geometry[2]
+                            h2 = self.window_resize_geometry[3]+yy
+                            # min size of the window
+                            if w2 > 75 and h2 > 75:
+                                if ddeco:
+                                    ddeco.configure(x=x2, y=y2, width=w2, height=h2)
+                                    wwin.configure(x=x2+BORDER_WIDTH+BORDER_WIDTH2, y=y2+BORDER_WIDTH+BORDER_WIDTH2+TITLE_HEIGHT, width=w2-BORDER_WIDTH*2, height=h2-BORDER_WIDTH*2-TITLE_HEIGHT)
+                                elif wwin:
+                                    wwin.configure(x=x2, y=y2, width=w2, height=h2)
+                        # top
+                        elif self.resize_window_code == 1:
+                            x2 = self.window_resize_geometry[0]
+                            y2 = self.window_resize_geometry[1]+yy
+                            w2 = self.window_resize_geometry[2]
+                            h2 = self.window_resize_geometry[3]-yy
+                            # min size of the window
+                            if w2 > 75 and h2 > 75:
+                                if ddeco:
+                                    ddeco.configure(x=x2, y=y2, width=w2, height=h2)
+                                    wwin.configure(x=x2+BORDER_WIDTH+BORDER_WIDTH2, y=y2+BORDER_WIDTH+BORDER_WIDTH2+TITLE_HEIGHT, width=w2-BORDER_WIDTH*2, height=h2-BORDER_WIDTH*2-TITLE_HEIGHT)
+                                elif wwin:
+                                    wwin.configure(x=x2, y=y2, width=w2, height=h2)
                     #
                     continue
                 #### dragging
@@ -1115,7 +1254,7 @@ class x_wm:
                         else:
                             ggeom = wwin.get_geometry()
                         #
-                        if y <= self.delta_drag_start_point[1]+4:
+                        if y <= self.delta_drag_start_point[1]+4+start_y:
                             #
                             if ddeco and wwin:
                                 ddeco.configure(x=x - self.delta_drag_start_point[0], y=start_y)
@@ -1373,6 +1512,20 @@ class x_wm:
                         self.mouse_button_resize_drag_start_point = (ex, ey)
                         self.delta_drag_start_point = (ex - cx, ey - cy)
                         #
+                        wgeom = wwin.get_geometry()
+                        # top left
+                        if wgeom.x < ex < wgeom.x+int(wgeom.width/2)-1 and wgeom.y < ey < wgeom.y+int(wgeom.height/2)-1:
+                            self.resize_window_code = 0
+                        # top right
+                        elif  wgeom.x+int(wgeom.width/2)+1 < ex < wgeom.x+wgeom.width and wgeom.y < ey < wgeom.y+int(wgeom.height/2)-1:
+                            self.resize_window_code = 2
+                        # bottom left
+                        if wgeom.x < ex < wgeom.x+int(wgeom.width/2)-1 and wgeom.y+int(wgeom.height/2)+1 < ey < wgeom.y+wgeom.height:
+                            self.resize_window_code = 6
+                        # bottom right
+                        elif  wgeom.x+int(wgeom.width/2)+1 < ex < wgeom.x+wgeom.width and wgeom.y+int(wgeom.height/2)+1 < ey < wgeom.y+wgeom.height:
+                            self.resize_window_code = 4
+                        #
                         continue
                         
                 ##########
@@ -1399,7 +1552,7 @@ class x_wm:
                             _bring_to_front = 1
                             ######
                         ################ window to front before dragging #############
-                        if pdatawin == ddeco:
+                        if pdatawin == ddeco and _bring_to_front:
                             #
                             for iitem in self.transient_windows:
                                 if self.transient_windows[iitem] == pdatawin:
@@ -1445,7 +1598,8 @@ class x_wm:
                             elif (dx+dw-BORDER_WIDTH-self.deco_btn_width*3-BTN_SPACE*2) < ex < (dx+dw-BORDER_WIDTH-BTN_SPACE*2-self.deco_btn_width*2):
                                 if (dy+BORDER_WIDTH) < ey < (dy+BORDER_WIDTH+self.deco_btn_height):
                                     continue
-                            ############## resizing - bottom right ###############
+                            ############## resizing ###############
+                            # bottom right
                             elif (cx+dw-40) <= ex <= (cx+dw):
                                 if (cy+dh-40) <= ey <= (cy+dh):
                                     # skip maximized window
@@ -1461,7 +1615,139 @@ class x_wm:
                                     self.window_resize_geometry = (dx, dy, dw, dh)
                                     self.mouse_button_resize_drag_start_point = (ex, ey)
                                     self.delta_drag_start_point = (ex - cx, ey - cy)
+                                    #
+                                    self.resize_window_code = 4
+                                    #
                                     continue
+                                elif (cy) <= ey <= (cy+40):
+                                    # skip maximized window
+                                    if wwin in self.MAXIMIZED_WINDOWS:
+                                        continue
+                                    #
+                                    self.btn1_drag = ddeco
+                                    self.grabbed_window_btn1 = ddeco
+                                    self.mouse_button_left = 1
+                                    self.btn1_drag.grab_pointer(True, X.PointerMotionMask | X.ButtonReleaseMask, X.GrabModeAsync,
+                                            X.GrabModeAsync, X.NONE, X.NONE, 0)
+                                    #
+                                    self.window_resize_geometry = (dx, dy, dw, dh)
+                                    self.mouse_button_resize_drag_start_point = (ex, ey)
+                                    self.delta_drag_start_point = (ex - cx, ey - cy)
+                                    #
+                                    self.resize_window_code = 2
+                                    continue
+                                # right
+                                elif (cy+80) <= ey <= (cy+dh-80):
+                                    # skip maximized window
+                                    if wwin in self.MAXIMIZED_WINDOWS:
+                                        continue
+                                    #
+                                    self.btn1_drag = ddeco
+                                    self.grabbed_window_btn1 = ddeco
+                                    self.mouse_button_left = 1
+                                    self.btn1_drag.grab_pointer(True, X.PointerMotionMask | X.ButtonReleaseMask, X.GrabModeAsync,
+                                            X.GrabModeAsync, X.NONE, X.NONE, 0)
+                                    #
+                                    self.window_resize_geometry = (dx, dy, dw, dh)
+                                    self.mouse_button_resize_drag_start_point = (ex, ey)
+                                    self.delta_drag_start_point = (ex - cx, ey - cy)
+                                    #
+                                    self.resize_window_code = 3
+                                    continue
+                            # bottom left
+                            elif (cx) <= ex <= (cx+40):
+                                if (cy+dh-40) <= ey <= (cy+dh):
+                                    # skip maximized window
+                                    if wwin in self.MAXIMIZED_WINDOWS:
+                                        continue
+                                    #
+                                    self.btn1_drag = ddeco
+                                    self.grabbed_window_btn1 = ddeco
+                                    self.mouse_button_left = 1
+                                    self.btn1_drag.grab_pointer(True, X.PointerMotionMask | X.ButtonReleaseMask, X.GrabModeAsync,
+                                            X.GrabModeAsync, X.NONE, X.NONE, 0)
+                                    #
+                                    self.window_resize_geometry = (dx, dy, dw, dh)
+                                    self.mouse_button_resize_drag_start_point = (ex, ey)
+                                    self.delta_drag_start_point = (ex - cx, ey - cy)
+                                    #
+                                    self.resize_window_code = 6
+                                    continue
+                                # top left
+                                elif (cy) <= ey <= (cy+40):
+                                    # skip maximized window
+                                    if wwin in self.MAXIMIZED_WINDOWS:
+                                        continue
+                                    #
+                                    self.btn1_drag = ddeco
+                                    self.grabbed_window_btn1 = ddeco
+                                    self.mouse_button_left = 1
+                                    self.btn1_drag.grab_pointer(True, X.PointerMotionMask | X.ButtonReleaseMask, X.GrabModeAsync,
+                                            X.GrabModeAsync, X.NONE, X.NONE, 0)
+                                    #
+                                    self.window_resize_geometry = (dx, dy, dw, dh)
+                                    self.mouse_button_resize_drag_start_point = (ex, ey)
+                                    self.delta_drag_start_point = (ex - cx, ey - cy)
+                                    #
+                                    self.resize_window_code = 0
+                                    continue
+                                # left
+                                elif (cy+80) <= ey <= (cy+dh-80):
+                                    # skip maximized window
+                                    if wwin in self.MAXIMIZED_WINDOWS:
+                                        continue
+                                    #
+                                    self.btn1_drag = ddeco
+                                    self.grabbed_window_btn1 = ddeco
+                                    self.mouse_button_left = 1
+                                    self.btn1_drag.grab_pointer(True, X.PointerMotionMask | X.ButtonReleaseMask, X.GrabModeAsync,
+                                            X.GrabModeAsync, X.NONE, X.NONE, 0)
+                                    #
+                                    self.window_resize_geometry = (dx, dy, dw, dh)
+                                    self.mouse_button_resize_drag_start_point = (ex, ey)
+                                    self.delta_drag_start_point = (ex - cx, ey - cy)
+                                    #
+                                    self.resize_window_code = 7
+                                    continue
+                            # top
+                            elif (cx+80) <= ex <= (cx+dw-80) and cy <= ey <= (cy+4):
+                                if BORDER_WIDTH < 4:
+                                    continue
+                                if BORDER_WIDTH > 8:
+                                    # skip maximized window
+                                    if wwin in self.MAXIMIZED_WINDOWS:
+                                        continue
+                                    #
+                                    self.btn1_drag = ddeco
+                                    self.grabbed_window_btn1 = ddeco
+                                    self.mouse_button_left = 1
+                                    self.btn1_drag.grab_pointer(True, X.PointerMotionMask | X.ButtonReleaseMask, X.GrabModeAsync,
+                                            X.GrabModeAsync, X.NONE, X.NONE, 0)
+                                    #
+                                    self.window_resize_geometry = (dx, dy, dw, dh)
+                                    self.mouse_button_resize_drag_start_point = (ex, ey)
+                                    self.delta_drag_start_point = (ex - cx, ey - cy)
+                                    #
+                                    self.resize_window_code = 1
+                                    continue
+                            # bottom
+                            elif (cx+80) <= ex <= (cx+dw-80) and (cy+dh-40) <= ey <= (cy+dh):
+                                # skip maximized window
+                                if wwin in self.MAXIMIZED_WINDOWS:
+                                    continue
+                                #
+                                self.btn1_drag = ddeco
+                                self.grabbed_window_btn1 = ddeco
+                                self.mouse_button_left = 1
+                                self.btn1_drag.grab_pointer(True, X.PointerMotionMask | X.ButtonReleaseMask, X.GrabModeAsync,
+                                        X.GrabModeAsync, X.NONE, X.NONE, 0)
+                                #
+                                self.window_resize_geometry = (dx, dy, dw, dh)
+                                self.mouse_button_resize_drag_start_point = (ex, ey)
+                                self.delta_drag_start_point = (ex - cx, ey - cy)
+                                #
+                                self.resize_window_code = 5
+                                continue
                             ############## DRAG - decoration #############
                             else:
                                 # skip window at back
@@ -1566,7 +1852,8 @@ class x_wm:
                                 if wwin in self.DECO_WIN:
                                     self.minimize_window(wwin, 3)
                                 continue
-                #
+                # reset
+                self.resize_window_code = -1
                 # window resizing
                 if self.btn1_drag:
                     self.btn1_drag = None
@@ -1613,7 +1900,7 @@ class x_wm:
                         if data[2] == 8:
                             # data.l[0] = x_root 
                             # data.l[1] = y_root
-                            # data.l[2] = direction - 8 move - 11 cancel - 4 resize_bottom_right
+                            # data.l[2] = direction - 8 move - 11 cancel - 4 resize_bottom_right - 6 resize_bottom_left
                             # data.l[3] = button
                             # data.l[4] = source indication - 1
                             ########
@@ -1633,7 +1920,9 @@ class x_wm:
                             self.delta_drag_start_point = (x - cx, y - cy)
                             ########
                         # resize at bottom-right
-                        elif data[2] == 4:
+                        # elif data[2] == 4:
+                        elif data[2] in [0,1,2,3,4,5,6,7]:
+                            self.resize_window_code = data[2]
                             self.btn1_drag = event.window
                             self.grabbed_window_btn1 = event.window
                             self.mouse_button_left = 1
@@ -1653,7 +1942,7 @@ class x_wm:
                                 self.btn1_drag = None
                                 self.window_resize_geometry = None
                                 self.mouse_button_resize_drag_start_point = None
-                            # file-roller: senza va in crash se premo in file-roller
+                            # 
                             if self.grabbed_window_btn1:
                                 self.mouse_button_left = 0
                                 self.delta_drag_start_point = None
@@ -1901,6 +2190,7 @@ class x_wm:
     def on_supported_attributes(self):
         attributes = [
             '_NET_SUPPORTED',
+            'WM_PROTOCOLS',
             '_NET_ACTIVE_WINDOW',
             '_NET_CLIENT_LIST',
             '_NET_CLIENT_LIST_STACKING',
@@ -1914,6 +2204,8 @@ class x_wm:
             '_NET_WM_STATE_MAXIMIZE_HORZ',
             '_NET_WM_STATE_ABOVE',
             '_NET_WM_STATE_BELOW',
+            '_NET_WM_STATE_MODAL',
+            'WM_TRANSIENT_FOR',
             '_NET_SUPPORTING_WM_CHECK',
             '_NET_WM_ACTION_CLOSE',
             '_NET_WM_ICON',
@@ -1935,6 +2227,13 @@ class x_wm:
             '_NET_DESKTOP_VIEWPORT',
             '_NET_CURRENT_DESKTOP',
             '_NET_DESKTOP_NAMES',
+            '_NET_WM_ALLOWED_ACTIONS',
+            '_NET_WM_ACTION_MOVE',
+            '_NET_WM_ACTION_RESIZE',
+            '_NET_WM_ACTION_MINIMIZE',
+            '_NET_WM_ACTION_MAXIMIZE_VERT',
+            '_NET_WM_ACTION_MAXIMIZE_HORZ',
+            '_NET_WM_ACTION_FULLSCREEN',
             'WM_S0',
             'MANAGER',
             'WM_DELETE_WINDOW',
