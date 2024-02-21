@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
-# v. 20240219
+# v. 20240221
 
 ##############
 ##### OPTIONS
 
 # the border size of the decoration (px)
-BORDER_WIDTH = 3
+BORDER_WIDTH = 4
 # the other borders
 BORDER_WIDTH2 = 2
 
@@ -19,9 +19,6 @@ DECO_BORDER_COLOR2 = "#008000"
 # disable window decoration: 1 disable - 0 enable
 NO_DECO = 0
 
-# space between buttons
-BTN_SPACE = 4
-
 # size: 1 normal (29 px) - 2 big (36 px)
 TITLEBAR_SIZE = 1
 
@@ -31,28 +28,24 @@ DECO_COLOR = "#D2AE26"
 # window manager actions: Super_L (win key) - Alt_l - Control_l
 _STATE = "Super_L"
 
-# terminate this program - key e
-_EXIT = "e"
+# draw title in the titlebar
+_DRAW_TITLE = 0
 
+########### *** COMMANDS WITH WIN/CTRL+ALT *** ###########
+################## PROGRAM NAMES ############
 # terminal - key x
 _TERMINAL = "xterm"
-
 # command 1 - key 1
 COMM_1 = "qterminal"
-
 # command 2 - key 2
 COMM_2 = "file-roller"
-
 # command 3 - key 3
 COMM_3 = "yad-icon-browser"
-
 # command 4 - key 4
 COMM_4 = "tint2"
-
-# resize with Super+right mouse button: 0 no - 1 yes
-RESIZE_WITH_KEY = 1
-
-#### keybindings with Super_L
+######################### KEYS #################
+# terminate this window manager
+_EXIT = "e"
 # close
 _CC = "c"
 # maximize
@@ -77,8 +70,9 @@ _C2 = "2"
 _C3 = "3"
 # custom program 4
 _C4 = "4"
-
-##############
+# print
+_PRINT = "Print"
+############## end commands ###########
 
 from Xlib.display import Display
 from Xlib import X, XK, protocol, Xatom, Xutil
@@ -87,7 +81,6 @@ import subprocess
 import signal
 #import threading
 from PIL import Image
-
 
 
 # randr extension
@@ -102,6 +95,8 @@ if Display().has_extension('RANDR'):
 screen = Display().screen()
 root = Display().screen().root
 
+# space between buttons
+BTN_SPACE = 0
 
 TITLE_HEIGHT = 0
 if TITLEBAR_SIZE == 1:
@@ -110,6 +105,8 @@ elif TITLEBAR_SIZE == 2:
     TITLE_HEIGHT = 36
 BTN_SIZE = TITLE_HEIGHT
 
+USE_WIN=1
+
 # focus to the window under the pointer
 SLOPPY_FOCUS = 1
 
@@ -117,9 +114,31 @@ SLOPPY_FOCUS = 1
 # if 0, try to use application data before
 ALWAYS_CENTERED = 0
 
+# resize with Super+right mouse button: 0 no - 1 yes
+RESIZE_WITH_KEY = 1
 
 # notification position: 1 top - 2 bottom
 _NOTIFICATION_POS = 1
+
+# font name and size
+_FONT_NAME = "DejaVuSans.ttf"
+_FONT_SIZE = 20
+_FONT_COLOR = "white"
+_STROKE_WIDTH = 0
+_STROKE_FILL = "black"
+
+
+font = None
+if _DRAW_TITLE:
+    from PIL import ImageDraw, ImageFont
+    font = ImageFont.load_default().font
+    try:
+        if _FONT_NAME:
+            font = ImageFont.truetype(_FONT_NAME, _FONT_SIZE)
+        else:
+            font = ImageFont.truetype("_font.ttf", _FONT_SIZE)
+    except:
+        font = ImageFont.truetype("_font.ttf", _FONT_SIZE)
 
 colormap = Display().screen().default_colormap
 win_color = colormap.alloc_named_color(DECO_COLOR).pixel
@@ -153,6 +172,7 @@ _is_running = 1
 if NO_DECO == 1:
     BORDER_WIDTH = 0
     TITLE_HEIGHT = 0
+    _DRAW_TITLE = 0
 
 # physical screen size
 screen_width = Display().screen().width_in_pixels
@@ -223,9 +243,9 @@ if NO_DECO == 0:
     DECO_EXPOSURE = 1
 
 if DECO_EXPOSURE:
-    mask_deco = X.EnterWindowMask | X.LeaveWindowMask | X.ExposureMask | X.SubstructureNotifyMask
+    mask_deco = X.EnterWindowMask | X.LeaveWindowMask | X.ExposureMask | X.SubstructureNotifyMask | X.ButtonPressMask | X.ButtonReleaseMask
 else:
-    mask_deco = X.EnterWindowMask | X.LeaveWindowMask | X.SubstructureNotifyMask
+    mask_deco = X.EnterWindowMask | X.LeaveWindowMask | X.SubstructureNotifyMask | X.ButtonPressMask | X.ButtonReleaseMask
 
 
 class x_wm:
@@ -258,17 +278,51 @@ class x_wm:
         self.NET_LIST_STACK = self.display.intern_atom("_NET_CLIENT_LIST_STACKING")
         self.STATE_DEMANDS_ATTENTION = self.display.intern_atom("_NET_WM_STATE_DEMANDS_ATTENTION")
         self.WM_S = self.display.intern_atom('WM_S0')
-        # | X.FocusChangeMask
-        mask = (X.SubstructureRedirectMask | X.SubstructureNotifyMask
-                | X.EnterWindowMask | X.LeaveWindowMask
-                | X.ButtonPressMask | X.ButtonReleaseMask | X.PropertyChangeMask
-                | X.KeyPressMask | X.KeyReleaseMask)
+        # | X.FocusChangeMask - | X.KeyPressMask | X.KeyReleaseMask  | X.ButtonPressMask | X.ButtonReleaseMask
+        
+        if USE_WIN:
+            mask = (X.SubstructureRedirectMask | X.SubstructureNotifyMask
+                    | X.EnterWindowMask | X.LeaveWindowMask | X.ButtonPressMask | X.ButtonReleaseMask
+                    | X.KeyPressMask | X.KeyReleaseMask | X.PropertyChangeMask)
+        else:
+            mask = (X.SubstructureRedirectMask | X.SubstructureNotifyMask
+                    | X.EnterWindowMask | X.LeaveWindowMask | X.ButtonReleaseMask
+                    | X.PropertyChangeMask)
         #
         self.root.change_attributes(event_mask=mask)
         #
-        # Super_L 
-        self.root.grab_key(self.display.keysym_to_keycode(XK.string_to_keysym(_STATE)),
-            X.AnyModifier, 1, X.GrabModeAsync, X.GrabModeAsync)
+        if USE_WIN:
+            # Super_L 
+            self.root.grab_key(self.display.keysym_to_keycode(XK.string_to_keysym(_STATE)),
+                X.AnyModifier, 1, X.GrabModeAsync, X.GrabModeAsync)
+        
+            # terminal
+            # if _TERMINAL:
+                # keycode = self.display.keysym_to_keycode(XK.string_to_keysym(_TERMINAL))
+                # modifier = X.Mod1Mask | X.ControlMask
+                # self.root.grab_key(keycode, modifier, 1, X.GrabModeAsync,
+                    # X.GrabModeAsync)
+        else:
+            #
+            for _key in [_EXIT,_CC,_MM,_MN,_RS,_RW,_RD,_RA,_EXEC_TERM,_C1,_C2,_C3,_C4]:
+                if _key:
+                    keycode = self.display.keysym_to_keycode(XK.string_to_keysym(_key))
+                    modifier = X.Mod1Mask | X.ControlMask
+                    self.root.grab_key(keycode, modifier, 1, X.GrabModeAsync,
+                        X.GrabModeAsync)
+            
+            if _PRINT:
+                pass
+                # keycode = self.display.keysym_to_keycode(XK.string_to_keysym(_PRINT))
+                # modifier = X.NONE
+                # # modifier = X.AnyModifier
+                # self.root.grab_key(keycode, modifier, 1, X.GrabModeAsync,
+                    # X.GrabModeAsync)
+            #
+            for button in [1, 3]:
+                self.root.grab_button(button, X.Mod4Mask, True,
+                         X.ButtonPressMask, X.GrabModeAsync,
+                         X.GrabModeAsync, X.NONE, X.NONE)
         #
         # windows with decoration: window:decoration
         self.DECO_WIN = {}
@@ -307,11 +361,14 @@ class x_wm:
         self.resize_window_code = -1
         # the window or the decoration when a key is been pressed
         self.key_press_window = None
-        # the window that has the pointer in
-        self.entered_window = None
-        ########
+        # # the window that has the pointer in
+        # self.entered_window = None
+        #
         self.mouse_button_left = 0
         self.delta_drag_start_point = None
+        # deco and title name
+        self.title_is_changed = None
+        ########
         #
         self.on_supported_attributes()
         #
@@ -342,7 +399,9 @@ class x_wm:
         if NO_DECO == 0:
             self.deco_btn_width = 0
             self.deco_btn_height = 0
-            self.on_deco_btn()
+            # self.on_deco_btn()
+        if _DRAW_TITLE:
+            self.title_size = None
         #
         # self.on_start()
         #
@@ -385,7 +444,7 @@ class x_wm:
 
    
     # add a decoration to win
-    def win_deco(self, win):
+    def win_deco(self, win, _title):
         if NO_DECO == 1:
             win.configure(border_width=BORDER_WIDTH2)
             self.DECO_WIN[win] = None
@@ -413,6 +472,10 @@ class x_wm:
         deco.change_attributes(event_mask=mask_deco)
         self.display.sync()
         #
+        if _DRAW_TITLE:
+            self._on_title2(deco, win)
+        if NO_DECO == 0:
+            self.on_deco_btn()
         # wret = 0
         # def werror(err, ww):
             # wret = -1
@@ -420,6 +483,83 @@ class x_wm:
         # win.reparent(deco, BORDER_WIDTH, TITLE_HEIGHT, onerror=werror)
         #
         return deco
+    
+    # prepare the title
+    def _on_title2(self, deco, win):
+        if deco == None:
+            return
+        # 
+        if not win:
+            win = self.find_win_of_deco(deco)
+        #
+        _text = "X"
+        if win:
+            _text = self.get_window_name(win)
+        else:
+            return
+        #
+        if _text == "X":
+            return
+        #
+        dgeom = deco.get_geometry()
+        dx = dgeom.x
+        dy = dgeom.y
+        dw = dgeom.width
+        dh = dgeom.height
+        # 
+        #
+        _available_width = dw-self.deco_btn_width*3-BTN_SPACE*2
+        #
+        if _available_width > 0:
+            #deco.clear_area (x=dx, y=dy, width=_available_width, height=TITLE_HEIGHT, exposures=0, onerror=None )
+            #deco.clear_area()
+            deco.clear_area (x=0, y=0, width=_available_width, height=TITLE_HEIGHT, exposures=0, onerror=None )
+            #
+            # if self.mouse_button_left == 1:
+                # return
+        #
+        _text_size_width = int(font.getlength(_text))+1
+        #
+        title_size = (_text_size_width, TITLE_HEIGHT)
+        imt = Image.new("RGB", title_size, DECO_COLOR)
+        #
+        d = ImageDraw.Draw(imt)
+        xt = int(title_size[0]/2)
+        yt = int((title_size[1])/2)
+        #
+        d.text((xt, yt), _text, fill=_FONT_COLOR, anchor="mm", font=font, stroke_width=_STROKE_WIDTH, stroke_fill=_STROKE_FILL)
+        #
+        iwt, iht = imt.size
+        t_mask = self.screen.root.create_pixmap(iwt, iht, self.screen.root_depth)
+        t_gc = t_mask.create_gc()
+        t_mask.put_pil_image(t_gc, 0, 0, imt)
+        
+    
+    # draw the title
+    # def _on_title(self, deco):
+        # # 
+        # dgeom = deco.get_geometry()
+        # dx = dgeom.x
+        # dy = dgeom.y
+        # dw = dgeom.width
+        # dh = dgeom.height
+        # #
+        # _available_width = dw-self.deco_btn_width*3-BTN_SPACE*2
+        # #
+        # if _available_width > 0:
+            # deco.clear_area (x=dx, y=dy, width=_available_width, height=TITLE_HEIGHT, exposures=0, onerror=None )
+        # #
+        t_mask_geometry = t_mask.get_geometry()
+        # width and height
+        iwt = t_mask_geometry.width
+        iht = t_mask_geometry.height
+        # x and y
+        imxt = int((_available_width-iwt)/2)
+        # imyt = 0
+        imyt = int(BORDER_WIDTH/2)
+        # deco.clear_area (x=imxt, y=imyt, width=iwt, height=iht, exposures=0, onerror=None )
+        deco.copy_area(t_gc, t_mask, 0, 0, iwt, iht, imxt, imyt )
+    
     
     def on_deco_btn(self):
         # close
@@ -445,7 +585,13 @@ class x_wm:
         self.l_mask2 = self.screen.root.create_pixmap(iw2, ih2, self.screen.root_depth)
         self.l_gc2 = self.l_mask2.create_gc()
         self.l_mask2.put_pil_image(self.l_gc2, 0, 0, im2)
-        
+        # # title
+        # if _DRAW_TITLE:
+            # iwt, iht = self.imt.size
+            # self.t_mask = self.screen.root.create_pixmap(iwt, iht, self.screen.root_depth)
+            # self.t_gc = self.t_mask.create_gc()
+            # self.t_mask.put_pil_image(self.t_gc, 0, 0, self.imt)
+            
     
     def deco_btn(self, deco):
         dgeom = deco.get_geometry()
@@ -453,12 +599,20 @@ class x_wm:
         dw = dgeom.width
         # normal
         if TITLEBAR_SIZE == 1:
-            imx = dw-BORDER_WIDTH-BORDER_WIDTH2-self.deco_btn_width
+            # imx = dw-BORDER_WIDTH-BORDER_WIDTH2-self.deco_btn_width
+            imx = dw-self.deco_btn_width
             imy = 2
         # big
         elif TITLEBAR_SIZE == 2:
             imx = dw-BORDER_WIDTH-BORDER_WIDTH2-self.deco_btn_width
             imy = BORDER_WIDTH+BORDER_WIDTH2
+        # # title
+        # if _DRAW_TITLE:
+            # iwt, iht = self.imt.size
+            # imxt = int(((dw-self.deco_btn_width*3-BTN_SPACE*2)-iwt)/2)
+            # imyt = BORDER_WIDTH+BORDER_WIDTH2
+            # # deco.copy_area(self.t_gc, self.t_mask, 0, 0, iwt-self.deco_btn_width*3-BTN_SPACE*2, iht, imxt, imyt )
+            # deco.copy_area(self.t_gc, self.t_mask, 0, 0, iwt, iht, imxt, imyt )
         # close
         deco.copy_area(self.l_gc, self.l_mask, 0, 0, self.deco_btn_width,self.deco_btn_height, imx,imy)
         # maximize
@@ -469,7 +623,6 @@ class x_wm:
         imx2 = imx - BTN_SPACE - self.deco_btn_width - BTN_SPACE - self.deco_btn_width
         imy2 = imy
         deco.copy_area(self.l_gc2, self.l_mask2, 0, 0, self.deco_btn_width,self.deco_btn_height, imx2,imy2)
-        
         
     
     # find the window from its decoration
@@ -596,6 +749,13 @@ class x_wm:
                         self.active_window.set_input_focus(X.RevertToPointerRoot, X.CurrentTime)
                         # Xutil.WithdrawnState, Xutil.NormalState, Xutil.IconicState
                         self.active_window.set_wm_state(state = Xutil.NormalState, icon = X.NONE)
+                    # to verify
+                    wwin.change_attributes(event_mask=X.PropertyChangeMask)
+                    #
+                    # if _DRAW_TITLE and deco:
+                        # self._on_title(deco)
+                        # # self._on_title2(deco, wwin)
+                    #
                     self.display.sync()
                     # 
                     self.active_window.raise_window()
@@ -628,28 +788,6 @@ class x_wm:
             elif event.type == X.MapRequest:
                 if event.window == X.NONE or event.window == None:
                     continue
-                # check if this window is a transient one
-                _is_transient = None
-                prop = None
-                try:
-                    prop = event.window.get_full_property(self.WM_TRANSIENT, X.AnyPropertyType)
-                except:
-                    pass
-                #
-                if prop:
-                    w_id = prop.value.tolist()[0]
-                    #
-                    for win in self.DECO_WIN:
-                        if win.id == w_id:
-                            self.transient_windows[win] = event.window
-                            _is_transient = win
-                            break
-                    # remove transient property
-                    if _is_transient == None:
-                        event.window.delete_property(
-                            self.WM_TRANSIENT,
-                            )
-                #
                 ##########
                 # _is_above = 0
                 # _is_below = 0
@@ -683,6 +821,27 @@ class x_wm:
                     _is_modal = 0
                 #
                 ##########
+                # check if this window is a transient one
+                _is_transient = None
+                prop = None
+                try:
+                    prop = event.window.get_full_property(self.WM_TRANSIENT, X.AnyPropertyType)
+                except:
+                    pass
+                #
+                if prop:
+                    w_id = prop.value.tolist()[0]
+                    #
+                    for win in self.DECO_WIN:
+                        if win.id == w_id:
+                            self.transient_windows[win] = event.window
+                            _is_transient = win
+                            break
+                    # remove transient property
+                    if _is_transient == None:
+                        event.window.delete_property(
+                            self.WM_TRANSIENT,
+                            )
                 #
                 attrs = event.window.get_attributes()
                 if attrs is None:
@@ -870,6 +1029,15 @@ class x_wm:
                     event.window.map()
                     event.window.raise_window()
                     #
+                    # event.window.change_property(
+                        # self.display.intern_atom('_MOTIF_WM_HINTS'),
+                        # self.display.intern_atom('_MOTIF_WM_HINTS'),
+                        # 32,
+                        # [0,0,0,0,0],
+                        # X.PropModeReplace,
+                    # )
+                    # self.display.sync()
+                    #
                     continue
                 #
                 # skip window that doesnt want the decoration
@@ -891,7 +1059,8 @@ class x_wm:
                             ##########
                             continue
                 #
-                deco = self.win_deco(event.window)
+                _title_text = self.get_window_name(event.window)
+                deco = self.win_deco(event.window, _title_text)
                 #
                 if deco != -1:
                     # deco.change_attributes(attrs)
@@ -927,18 +1096,35 @@ class x_wm:
             elif event.type == X.Expose:
                 # if event.count == 0:
                 if NO_DECO == 0:
-                    deco = self.find_win_of_deco(event.window)
-                    if deco:
-                        # decoration buttons
+                    win = None
+                    deco = None
+                    #
+                    if event.window in self.DECO_WIN:
+                        win = event.window
+                        deco = self.DECO_WIN[event.window]
+                    else:
+                        win = self.find_win_of_deco(event.window)
+                        if win:
+                            deco = event.window
+                    # decoration buttons
+                    if win:
                         self.deco_btn(event.window)
+                    # title
+                    if _DRAW_TITLE:
+                        if deco and win:
+                            # if self.title_is_changed == (deco, win):
+                                # continue
+                            # if self.mouse_button_left == 0:
+                            self._on_title2(deco, win)
+                            # self.title_is_changed = (deco, win)
             #
             elif event.type == X.EnterNotify:
                 if event.window == None:
                     continue
-                if event.window == self.root:
-                    self.entered_window = None
-                #
-                self.entered_window = event.window
+                # if event.window == self.root:
+                    # self.entered_window = None
+                # #
+                # self.entered_window = event.window
                 #
                 if SLOPPY_FOCUS:
                     if event.window in self.DECO_WIN:
@@ -1263,7 +1449,6 @@ class x_wm:
                                 wwin.configure(x=x - self.delta_drag_start_point[0], y=start_y)
                             #
                             continue
-                        
                     #
                     if ddeco and wwin:
                         ddeco.configure(x=x - self.delta_drag_start_point[0], y=y - self.delta_drag_start_point[1])
@@ -1305,7 +1490,13 @@ class x_wm:
                             X.ButtonPressMask|X.ButtonReleaseMask, X.GrabModeAsync,
                             X.GrabModeAsync, X.NONE, X.NONE)
                 #
-                if event.state & X.Mod4Mask:
+                if USE_WIN:
+                    _MOD = X.Mod4Mask
+                else:
+                    _MOD = (X.Mod1Mask | X.ControlMask)
+                # if event.state & X.Mod4Mask:
+                # if event.state & (X.Mod1Mask | X.ControlMask):
+                if event.state & _MOD:
                     # close active window
                     if event.detail == self.display.keysym_to_keycode(XK.string_to_keysym(_CC)):
                         if self.active_window:
@@ -1456,7 +1647,8 @@ class x_wm:
                             self.grabbed_window_btn1 = wwin
                             if ddeco:
                                 self.grabbed_window_btn1 = ddeco
-                            self.mouse_button_left = 11
+                            # self.mouse_button_left = 11
+                            self.mouse_button_left = 1
                             self.grabbed_window_btn1.grab_pointer(True, X.PointerMotionMask | X.ButtonReleaseMask|X.EnterWindowMask, X.GrabModeAsync,
                                         X.GrabModeAsync, X.NONE, X.NONE, 0)
                             #
@@ -1876,6 +2068,19 @@ class x_wm:
             elif event.type == X.PropertyNotify:
                 if event.window == X.NONE or event.window == None:
                     continue
+                # 
+                if _DRAW_TITLE:
+                    if event.atom in [self.NET_WM_NAME, self.WM_NAME]:
+                        wname = self.get_window_name(event.window)
+                        if event.window in self.DECO_WIN:
+                            deco = self.DECO_WIN[event.window]
+                            if deco == None:
+                                continue
+                            else:
+                                if self.title_is_changed == (deco, wname):
+                                    continue
+                                self._on_title2(deco, win)
+                                self.title_is_changed = (deco, wname)
                 #
                 if event.atom == self.NET_ACTIVE_WINDOW:
                     continue
@@ -1904,8 +2109,8 @@ class x_wm:
                             # data.l[3] = button
                             # data.l[4] = source indication - 1
                             ########
-                            self.grabbed_window_btn1 = deco
-                            self.mouse_button_left = 1
+                            # self.grabbed_window_btn1 = deco
+                            # self.mouse_button_left = 1
                             event.window.grab_pointer(True, X.PointerMotionMask | X.ButtonReleaseMask, X.GrabModeAsync,
                                         X.GrabModeAsync, X.NONE, X.NONE, 0)
                             #
@@ -2117,7 +2322,7 @@ class x_wm:
                 y = event.y
                 width, height = event.width, event.height
                 mask = event.value_mask
-                # if mask == 0b1111:
+                #
                 if mask & (X.CWX | X.CWY | X.CWWidth | X.CWHeight):
                     event.window.configure(x=x, y=y, width=width, height=height)
                     if event.window in self.DECO_WIN:
@@ -2125,21 +2330,21 @@ class x_wm:
                             self.DECO_WIN[event.window].configure(x=x-BORDER_WIDTH-BORDER_WIDTH2, y=y-TITLE_HEIGHT-BORDER_WIDTH-BORDER_WIDTH2, 
                                     width=width+BORDER_WIDTH+BORDER_WIDTH2, height=height+TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2)
                     self.display.sync()
-                # elif mask == 0b1100:
+                #
                 elif mask & (X.CWWidth | X.CWHeight):
                     event.window.configure(width=width, height=height)
                     if event.window in self.DECO_WIN:
                         if self.DECO_WIN[event.window]:
                             self.DECO_WIN[event.window].configure(width=width+BORDER_WIDTH+BORDER_WIDTH2, height=height+TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2)
                     self.display.sync()
-                # elif mask == 0b0011:
+                #
                 elif mask & (X.CWX | X.CWY):
                     event.window.configure(x=x, y=y)
                     if event.window in self.DECO_WIN:
                         if self.DECO_WIN[event.window]:
                             self.DECO_WIN[event.window].configure(x=x-BORDER_WIDTH-BORDER_WIDTH2, y=y-TITLE_HEIGHT-BORDER_WIDTH-BORDER_WIDTH2)
                     self.display.sync()
-                # elif mask == 0b01000000:
+                #
                 elif mask & X.CWStackMode:
                     event.window.configure(event.stack_mode)
                     self.display.sync()
@@ -2210,6 +2415,7 @@ class x_wm:
             '_NET_WM_ACTION_CLOSE',
             '_NET_WM_ICON',
             '_NET_WM_NAME',
+            'WM_NAME',
             '_NET_WM_PID',
             '_NET_WM_STATE_DEMANDS_ATTENTION',
             '_NET_WM_WINDOW_TYPE',
