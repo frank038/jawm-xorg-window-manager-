@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 
-# v. 20240221
+# v. 20240222
 
 ##############
 ##### OPTIONS
 
-# the border size of the decoration (px)
+# the inner border size of the decoration (px)
 BORDER_WIDTH = 4
-# the other borders
+# the border of other kind of windows or the outer decoration border
 BORDER_WIDTH2 = 2
 
-# decoration border color
+# decoration main border color
 DECO_BORDER_COLOR1 = "#7F7F7F"
 
 # the other border color
@@ -19,16 +19,30 @@ DECO_BORDER_COLOR2 = "#008000"
 # disable window decoration: 1 disable - 0 enable
 NO_DECO = 0
 
-# size: 1 normal (29 px) - 2 big (36 px)
-TITLEBAR_SIZE = 1
-
 # decoration color: buttons need to be recolored if changed
 DECO_COLOR = "#D2AE26"
+
+# the main desktop name
+MAIN_DESKTOP_NAME = "qt5desktop-1"
+
+# skip decocation: program name and reason, e.g.: APP_SPECIAL_DECO = [ ["xterm", "decoration-1"], [eventually other programs in the same way] ]
+# the default for no actions: APP_SPECIAL_DECO = []
+# PROGRAM NAME: from WMCLASS the first name (usually the launcher name without any arguments)
+# REASONS:
+# decoration-1 : the decoration from usually decorated windows
+# decoration-2 : the decoration and the BORDER_WIDTH2 from usually decorated windows
+# decoration-3 : all the undecorated windows will not have any BORDER_WIDTH2 ("*" as PROGRAM NAME is mandatory)
+# decoration-4 : add the decoration and the outer border to usually undecorated windows (the PROGRAM NAME is mandatory)
+APP_SPECIAL_DECO = [ ["*", "decoration-3"] ]
+
+# window position at the following coordinates: PROGRAM NAME - POSX POSY e.g.: APP_SPECIAL_POSITION = [ ["xterm", 100, 110] ]
+# PROGRAM NAME: from WMCLASS the first name (usually the launcher name without any arguments)
+APP_SPECIAL_POSITION = []
 
 # window manager actions: Super_L (win key) - Alt_l - Control_l
 _STATE = "Super_L"
 
-# draw title in the titlebar
+# draw title in the titlebar - performance may decrease while resizing or dragging if activated
 _DRAW_TITLE = 0
 
 ########### *** COMMANDS WITH WIN/CTRL+ALT *** ###########
@@ -95,6 +109,9 @@ if Display().has_extension('RANDR'):
 screen = Display().screen()
 root = Display().screen().root
 
+# size: 1 normal (29 px) - 2 big (36 px)
+TITLEBAR_SIZE = 1
+
 # space between buttons
 BTN_SPACE = 0
 
@@ -131,14 +148,17 @@ _STROKE_FILL = "black"
 font = None
 if _DRAW_TITLE:
     from PIL import ImageDraw, ImageFont
-    font = ImageFont.load_default().font
+    # font = ImageFont.load_default().font
     try:
         if _FONT_NAME:
             font = ImageFont.truetype(_FONT_NAME, _FONT_SIZE)
         else:
             font = ImageFont.truetype("_font.ttf", _FONT_SIZE)
     except:
-        font = ImageFont.truetype("_font.ttf", _FONT_SIZE)
+        try:
+            font = ImageFont.truetype("_font.ttf", _FONT_SIZE)
+        except:
+            _DRAW_TITLE = 0
 
 colormap = Display().screen().default_colormap
 win_color = colormap.alloc_named_color(DECO_COLOR).pixel
@@ -344,8 +364,10 @@ class x_wm:
         self.transient_windows = {}
         # windows belonging to window leader: window:[list of window with window_group hint (except transient)]
         self.windows_group = {}
-        # window in below state: window:decoration
-        self.windows_below = {}
+        # # window in above state: window:decoration
+        # self.windows_above = {}
+        # # window in below state: window:decoration
+        # self.windows_below = {}
         # only one can be in this state
         self.window_in_fullscreen_state = []
         #
@@ -801,17 +823,6 @@ class x_wm:
                         # _is_below = 1
                     if self.NET_STATE_MODAL == mvalue:
                         _is_modal = 1
-                #
-                # if _is_modal:
-                    # if _is_transient == 0:
-                        # w_id = mprop.value.tolist()[0]
-                        # #
-                        # for win in self.DECO_WIN:
-                            # if win.id == w_id:
-                                # self.transient_windows[win] = event.window
-                                # _is_transient = win
-                                # _is_modal = 0
-                                # break
                 # delete this property - cannot be managed
                 if _is_modal:
                     event.window.delete_property(
@@ -834,6 +845,10 @@ class x_wm:
                     #
                     for win in self.DECO_WIN:
                         if win.id == w_id:
+                            if win in self.transient_windows:
+                                if self.transient_windows[win]:
+                                    event.window.configure(stack_mode=X.Above, sibling=event.window)
+                            #
                             self.transient_windows[win] = event.window
                             _is_transient = win
                             break
@@ -926,7 +941,10 @@ class x_wm:
                         # desktop
                         elif ew_type[0] == '_NET_WM_WINDOW_TYPE_DESKTOP':
                             # if  self.desktop_window == []:
-                            self.desktop_window.append(event.window)
+                            if self.get_window_name(event.window) == MAIN_DESKTOP_NAME:
+                                self.desktop_window.insert(0, event.window)
+                            else:
+                                self.desktop_window.append(event.window)
                             event.window.configure(x=0, y=0, width=screen_width, height=screen_height)
                             # put at bottom of all
                             self.all_windows.insert(len(self.desktop_window), event.window)
@@ -934,12 +952,12 @@ class x_wm:
                             self.all_windows_stack.insert(len(self.desktop_window), event.window)
                             self._update_client_list_stack()
                             # the first must be the main desktop application
-                            _desktop_win = None
                             if self.desktop_window:
                                 if len(self.desktop_window) > 1:
                                     if self.desktop_window[0] != event.window:
-                                        event.window.configure(stack_mode=X.Below)
-                                        self.desktop_window[0].configure(stack_mode=X.Below)
+                                        # event.window.configure(stack_mode=X.Below)
+                                        # self.desktop_window[0].configure(stack_mode=X.Below)
+                                        event.window.configure(stack_mode=X.Above, sibling=self.desktop_window[0])
                                 else:
                                     event.window.configure(stack_mode=X.Below)
                             #
@@ -1017,7 +1035,24 @@ class x_wm:
                         x = int((screen_width_usable-win_geom.width)/2)
                         y = int((screen_height_usable-win_geom.height)/2)
                 #
-                event.window.configure(x=x, y=y)
+                # the window name
+                win_name = self.get_window_cmd(event.window)
+                #
+                if APP_SPECIAL_POSITION == []:
+                    event.window.configure(x=x, y=y)
+                else:
+                    xx = -999
+                    yy = -999
+                    for el in APP_SPECIAL_POSITION:
+                        if len(el) == 3:
+                            if el[0] == win_name:
+                                xx = el[1]
+                                yy = el[2]
+                                break
+                    #
+                    if xx != -999 and yy != -999:
+                        event.window.configure(x=xx, y=yy)
+                    
                 # self.display.sync()
                 #
                 if _is_transient:
@@ -1043,27 +1078,79 @@ class x_wm:
                     #
                     continue
                 #
-                # skip window that doesnt want the decoration
+                # some windows dont want any decoration
                 try:
                     pprop = event.window.get_full_property(self.display.intern_atom('_MOTIF_WM_HINTS'), X.AnyPropertyType)
                 except:
                     continue
                 #
+                skip_decoration = 0
+                # skip windows that dont want the decoration
                 if pprop != None:
                     if pprop.value:
                         if pprop.value.tolist()[2] == 0:
-                            # add the border
-                            event.window.configure(border_width=BORDER_WIDTH2)
+                            skip_decoration = 1
+                #
+                skip_deco = 99
+                # the window name in APP_SPECIAL_DECO or "*"
+                win_named = None
+                #
+                if NO_DECO == 0 and APP_SPECIAL_DECO != []:
+                    for el in APP_SPECIAL_DECO:
+                        if el[0] == win_name or el[0] == "*":
+                            win_named = el[0]
+                            # no decoration
+                            if el[1] == "decoration-1" and el[0] != "*":
+                                skip_deco = 1
+                                break
+                            # no decoration - no outer border
+                            elif el[1] == "decoration-2" and el[0] != "*":
+                                skip_deco = 2
+                                break
+                            # no outer border around the usually undecorated windows
+                            elif el[1] == "decoration-3" and el[0] == "*" and skip_decoration == 1:
+                                skip_deco = 3
+                                break
+                            # add the decoration anyway
+                            elif el[1] == "decoration-4" and el[0] != "*" and skip_decoration == 1:
+                                skip_deco = 4
+                                break
                             #
-                            mask = X.EnterWindowMask|X.StructureNotifyMask
-                            event.window.change_attributes(event_mask=mask)
-                            #
-                            self.DECO_WIN[event.window] = None
-                            #
-                            event.window.map()
-                            event.window.raise_window()
-                            ##########
-                            continue
+                # undecorated windows
+                if skip_decoration == 1:
+                    # skip the outer border
+                    if skip_deco == 2 or skip_deco == 3:
+                        skip_decoration = 3
+                    elif skip_deco == 4:
+                        skip_decoration = 0
+                # usually decorated window
+                elif skip_decoration == 0:
+                    # remove the decoration
+                    if skip_deco == 1:
+                        skip_decoration = 1
+                    # and the outer border
+                    elif skip_deco == 2:
+                        skip_decoration = 3
+                #
+                if skip_decoration > 0:
+                    # add the border
+                    if skip_decoration == 1:
+                        event.window.configure(border_width=BORDER_WIDTH2)
+                    #
+                    mask = X.EnterWindowMask|X.StructureNotifyMask
+                    event.window.change_attributes(event_mask=mask)
+                    #
+                    self.DECO_WIN[event.window] = None
+                    #
+                    event.window.map()
+                    event.window.raise_window()
+                    #
+                    # if _is_below:
+                        # self.windows_below[event.window] = None
+                    # elif _is_above:
+                        # self.windows_above[event.window] = None
+                    ##########
+                    continue
                 #
                 _title_text = self.get_window_name(event.window)
                 deco = self.win_deco(event.window, _title_text)
@@ -1093,6 +1180,11 @@ class x_wm:
                 #
                 mask = X.EnterWindowMask
                 event.window.change_attributes(event_mask=mask)
+                #
+                # if _is_below:
+                    # self.windows_below[event.window] = deco
+                # elif _is_above:
+                    # self.windows_above[event.window] = deco
                 #
                 continue
                 #
@@ -1261,6 +1353,12 @@ class x_wm:
                         self.window_in_fullscreen_state_CM = []
                     #
                     # self._find_and_update_the_active(win)
+                    #
+                    # if win in self.windows_below:
+                        # del self.windows_below[win]
+                    # elif win in self.windows_above:
+                        # del self.windows_above[win]
+                #
                 #
             #
             elif event.type == X.MotionNotify:
@@ -1441,20 +1539,37 @@ class x_wm:
                         continue
                     # do not go outside the top border
                     if self.mouse_button_left == 1:
-                        if ddeco:
-                            ggeom = ddeco.get_geometry()
-                        else:
-                            ggeom = wwin.get_geometry()
                         #
-                        if y <= self.delta_drag_start_point[1]+4+start_y:
+                        if USE_WIN:
+                            _MOD = X.Mod4Mask
+                        else:
+                            _MOD = X.Mod1Mask
+                        if not event.state & _MOD:
                             #
-                            if ddeco and wwin:
-                                ddeco.configure(x=x - self.delta_drag_start_point[0], y=start_y)
-                                wwin.configure(x=x - self.delta_drag_start_point[0] + BORDER_WIDTH+BORDER_WIDTH2, y=start_y+TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2)
-                            elif wwin:
-                                wwin.configure(x=x - self.delta_drag_start_point[0], y=start_y)
+                            if ddeco:
+                                ggeom = ddeco.get_geometry()
+                            else:
+                                ggeom = wwin.get_geometry()
                             #
-                            continue
+                            if y <= self.delta_drag_start_point[1]+4+start_y:
+                                #
+                                if ddeco and wwin:
+                                    ddeco.configure(x=x - self.delta_drag_start_point[0], y=start_y)
+                                    wwin.configure(x=x - self.delta_drag_start_point[0] + BORDER_WIDTH+BORDER_WIDTH2, y=start_y+TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2)
+                                elif wwin:
+                                    wwin.configure(x=x - self.delta_drag_start_point[0], y=start_y)
+                                #
+                                continue
+                            elif end_x-4 < x+ggeom.width-self.delta_drag_start_point[0]:
+                                if ddeco and wwin:
+                                    x = end_x-ggeom.width-BORDER_WIDTH2*2
+                                    ddeco.configure(x=x, y=y-self.delta_drag_start_point[1])
+                                    wwin.configure(x=x + BORDER_WIDTH+BORDER_WIDTH2, y=y-self.delta_drag_start_point[1]+TITLE_HEIGHT+BORDER_WIDTH+BORDER_WIDTH2)
+                                elif wwin:
+                                    x = end_x-ggeom.width-BORDER_WIDTH2*2
+                                    wwin.configure(x=x, y=y-self.delta_drag_start_point[1])
+                                #
+                                continue
                     #
                     if ddeco and wwin:
                         ddeco.configure(x=x - self.delta_drag_start_point[0], y=y - self.delta_drag_start_point[1])
@@ -2354,6 +2469,13 @@ class x_wm:
                 elif mask & X.CWStackMode:
                     event.window.configure(event.stack_mode)
                     self.display.sync()
+                    #
+                    # if event.window in self.windows_below:
+                        # deco = self.windows_below[event.window]
+                        # self.windows_below[event.window] = deco
+                    # elif event.window in self.windows_above:
+                        # deco = self.windows_above[event.window]
+                        # self.windows_above[event.window] = deco
                 # 
                 continue
             #
@@ -2523,7 +2645,16 @@ class x_wm:
     def close_window(self, win):
         _DELETE_PROTOCOL = 0
         #
-        protc = win.get_wm_protocols()
+        protc = None
+        try:
+            protc = win.get_wm_protocols()
+        except:
+            return
+            # if win in self.DECO_WIN:
+                # if self.DECO_WIN[win]:
+                    # win = self.DECO_WIN[win]
+                    # _DELETE_PROTOCOL = 0
+        #
         if protc:
             for iitem in protc.tolist():
                 if iitem == self.WM_DELETE_WINDOW:
@@ -2535,22 +2666,24 @@ class x_wm:
             if ppid:
                 # 9 signal.SIGKILL - 15 signal.SIGTERM
                 os.kill(ppid[0], 15)
-                return
+                #return
             #
-            win.kill_client()
-            return
+            else:
+                win.kill_client()
+                #return
         #
-        active = win
-        c_type1 = self.WM_DELETE_WINDOW
-        c_type = self.WM_PROTOCOLS
-        data = (32, [c_type1, 0,0,0,0])
-        sevent = protocol.event.ClientMessage(
-        window = active,
-        client_type = c_type,
-        data = data
-        )
-        self.display.send_event(win, sevent)
-        self.display.sync()
+        else:
+            active = win
+            c_type1 = self.WM_DELETE_WINDOW
+            c_type = self.WM_PROTOCOLS
+            data = (32, [c_type1, 0,0,0,0])
+            sevent = protocol.event.ClientMessage(
+            window = active,
+            client_type = c_type,
+            data = data
+            )
+            self.display.send_event(win, sevent)
+            self.display.sync()
     
     
     # activate the window by request - win deco type
@@ -2626,8 +2759,12 @@ class x_wm:
             #
             self.display.sync()
             # remove the demands attention hint
-            hints = self.active_window.get_wm_hints() or { 'flags': 0 }
-            if (hints['flags'] & Xutil.UrgencyHint):
+            hints = -1
+            try:
+                hints = self.active_window.get_wm_hints() or { 'flags': 0 }
+            except:
+                pass
+            if hints != -1 and (hints['flags'] & Xutil.UrgencyHint):
                 hints['flags'] &= ~Xutil.UrgencyHint
                 self.active_window.set_wm_hints(hints)
                 self.display.flush()
@@ -2981,6 +3118,16 @@ class x_wm:
             return "X"
         if cls is not None:
             return cls
+        else:
+            return "X"
+    
+    def get_window_cmd(self, window):
+        try:
+            cmd, cls = window.get_wm_class()
+        except:
+            return "X"
+        if cls is not None:
+            return cmd
         else:
             return "X"
     
