@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# v. 20240222
+# v. 20240224
 
 ##############
 ##### OPTIONS
@@ -22,18 +22,18 @@ NO_DECO = 0
 # decoration color: buttons need to be recolored if changed
 DECO_COLOR = "#D2AE26"
 
-# the main desktop name
+# the main desktop name (name from wmclass first value or window name)
 MAIN_DESKTOP_NAME = "qt5desktop-1"
 
 # skip decocation: program name and reason, e.g.: APP_SPECIAL_DECO = [ ["xterm", "decoration-1"], [eventually other programs in the same way] ]
 # the default for no actions: APP_SPECIAL_DECO = []
 # PROGRAM NAME: from WMCLASS the first name (usually the launcher name without any arguments)
 # REASONS:
-# decoration-1 : the decoration from usually decorated windows
-# decoration-2 : the decoration and the BORDER_WIDTH2 from usually decorated windows
+# decoration-1 : remove the decoration from usually decorated windows
+# decoration-2 : remove the decoration and the BORDER_WIDTH2 from usually decorated windows
 # decoration-3 : all the undecorated windows will not have any BORDER_WIDTH2 ("*" as PROGRAM NAME is mandatory)
 # decoration-4 : add the decoration and the outer border to usually undecorated windows (the PROGRAM NAME is mandatory)
-APP_SPECIAL_DECO = [ ["*", "decoration-3"] ]
+APP_SPECIAL_DECO = []
 
 # window position at the following coordinates: PROGRAM NAME - POSX POSY e.g.: APP_SPECIAL_POSITION = [ ["xterm", 100, 110] ]
 # PROGRAM NAME: from WMCLASS the first name (usually the launcher name without any arguments)
@@ -93,6 +93,7 @@ from Xlib import X, XK, protocol, Xatom, Xutil
 import sys, os, shutil
 import subprocess
 import signal
+import time
 #import threading
 from PIL import Image
 
@@ -139,7 +140,7 @@ _NOTIFICATION_POS = 1
 
 # font name and size
 _FONT_NAME = "DejaVuSans.ttf"
-_FONT_SIZE = 20
+_FONT_SIZE = 12
 _FONT_COLOR = "white"
 _STROKE_WIDTH = 0
 _STROKE_FILL = "black"
@@ -467,12 +468,16 @@ class x_wm:
    
     # add a decoration to win
     def win_deco(self, win, _title):
+        time.sleep(0.1)
         if NO_DECO == 1:
             win.configure(border_width=BORDER_WIDTH2)
             self.DECO_WIN[win] = None
             return -1
         #
-        geom = win.get_geometry()
+        try:
+            geom = win.get_geometry()
+        except:
+            return -1
         DECO_WIDTH = geom.width+BORDER_WIDTH*2
         DECO_HEIGHT = geom.height+TITLE_HEIGHT+BORDER_WIDTH*2
         #
@@ -529,16 +534,10 @@ class x_wm:
         dw = dgeom.width
         dh = dgeom.height
         # 
-        #
         _available_width = dw-self.deco_btn_width*3-BTN_SPACE*2
         #
         if _available_width > 0:
-            #deco.clear_area (x=dx, y=dy, width=_available_width, height=TITLE_HEIGHT, exposures=0, onerror=None )
-            #deco.clear_area()
             deco.clear_area (x=0, y=0, width=_available_width, height=TITLE_HEIGHT, exposures=0, onerror=None )
-            #
-            # if self.mouse_button_left == 1:
-                # return
         #
         _text_size_width = int(font.getlength(_text))+1
         #
@@ -555,31 +554,14 @@ class x_wm:
         t_mask = self.screen.root.create_pixmap(iwt, iht, self.screen.root_depth)
         t_gc = t_mask.create_gc()
         t_mask.put_pil_image(t_gc, 0, 0, imt)
-        
-    
-    # draw the title
-    # def _on_title(self, deco):
-        # # 
-        # dgeom = deco.get_geometry()
-        # dx = dgeom.x
-        # dy = dgeom.y
-        # dw = dgeom.width
-        # dh = dgeom.height
-        # #
-        # _available_width = dw-self.deco_btn_width*3-BTN_SPACE*2
-        # #
-        # if _available_width > 0:
-            # deco.clear_area (x=dx, y=dy, width=_available_width, height=TITLE_HEIGHT, exposures=0, onerror=None )
-        # #
         t_mask_geometry = t_mask.get_geometry()
         # width and height
         iwt = t_mask_geometry.width
         iht = t_mask_geometry.height
         # x and y
         imxt = int((_available_width-iwt)/2)
-        # imyt = 0
         imyt = int(BORDER_WIDTH/2)
-        # deco.clear_area (x=imxt, y=imyt, width=iwt, height=iht, exposures=0, onerror=None )
+        #
         deco.copy_area(t_gc, t_mask, 0, 0, iwt, iht, imxt, imyt )
     
     
@@ -607,12 +589,6 @@ class x_wm:
         self.l_mask2 = self.screen.root.create_pixmap(iw2, ih2, self.screen.root_depth)
         self.l_gc2 = self.l_mask2.create_gc()
         self.l_mask2.put_pil_image(self.l_gc2, 0, 0, im2)
-        # # title
-        # if _DRAW_TITLE:
-            # iwt, iht = self.imt.size
-            # self.t_mask = self.screen.root.create_pixmap(iwt, iht, self.screen.root_depth)
-            # self.t_gc = self.t_mask.create_gc()
-            # self.t_mask.put_pil_image(self.t_gc, 0, 0, self.imt)
             
     
     def deco_btn(self, deco):
@@ -628,13 +604,6 @@ class x_wm:
         elif TITLEBAR_SIZE == 2:
             imx = dw-BORDER_WIDTH-BORDER_WIDTH2-self.deco_btn_width
             imy = BORDER_WIDTH+BORDER_WIDTH2
-        # # title
-        # if _DRAW_TITLE:
-            # iwt, iht = self.imt.size
-            # imxt = int(((dw-self.deco_btn_width*3-BTN_SPACE*2)-iwt)/2)
-            # imyt = BORDER_WIDTH+BORDER_WIDTH2
-            # # deco.copy_area(self.t_gc, self.t_mask, 0, 0, iwt-self.deco_btn_width*3-BTN_SPACE*2, iht, imxt, imyt )
-            # deco.copy_area(self.t_gc, self.t_mask, 0, 0, iwt, iht, imxt, imyt )
         # close
         deco.copy_area(self.l_gc, self.l_mask, 0, 0, self.deco_btn_width,self.deco_btn_height, imx,imy)
         # maximize
@@ -756,15 +725,14 @@ class x_wm:
                     self.all_windows_stack.append(wwin)
                     self._update_client_list_stack()
                     #
-                    ew_type = None
-                    #
                     ew_type_tmp = self.get_window_type(event.window)
                     if ew_type_tmp != 1:
-                        if self.display.intern_atom("_NET_WM_WINDOW_TYPE_DIALOG") in ew_type_tmp:
-                            self.active_window.set_input_focus(X.RevertToParent, 0)
-                        elif self.display.intern_atom("_NET_WM_WINDOW_TYPE_UTILITY") in ew_type_tmp:
-                            self.active_window.set_input_focus(X.RevertToParent, 0)
-                        elif ew_type_tmp[0] == self.display.intern_atom("_NET_WM_WINDOW_TYPE_NORMAL"):
+                        # if self.display.intern_atom("_NET_WM_WINDOW_TYPE_DIALOG") in ew_type_tmp:
+                            # self.active_window.set_input_focus(X.RevertToParent, 0)
+                        # elif self.display.intern_atom("_NET_WM_WINDOW_TYPE_UTILITY") in ew_type_tmp:
+                            # self.active_window.set_input_focus(X.RevertToParent, 0)
+                        # el
+                        if ew_type_tmp[0] == self.display.intern_atom("_NET_WM_WINDOW_TYPE_NORMAL"):
                             self.active_window.set_input_focus(X.RevertToPointerRoot, X.CurrentTime)
                             self.active_window.set_wm_state(state = Xutil.NormalState, icon = X.NONE)
                     else:
@@ -772,7 +740,10 @@ class x_wm:
                         # Xutil.WithdrawnState, Xutil.NormalState, Xutil.IconicState
                         self.active_window.set_wm_state(state = Xutil.NormalState, icon = X.NONE)
                     # to verify
-                    wwin.change_attributes(event_mask=X.PropertyChangeMask)
+                    if _DRAW_TITLE:
+                        wwin.change_attributes(event_mask=X.PropertyChangeMask|X.EnterWindowMask)
+                    # else:
+                        # wwin.change_attributes(event_mask=X.EnterWindowMask)
                     #
                     # if _DRAW_TITLE and deco:
                         # self._on_title(deco)
@@ -940,13 +911,23 @@ class x_wm:
                             prop = event.window.get_full_property(self.display.get_atom("_NET_WM_STATE_ABOVE"), X.AnyPropertyType)
                         # desktop
                         elif ew_type[0] == '_NET_WM_WINDOW_TYPE_DESKTOP':
-                            # if  self.desktop_window == []:
-                            if self.get_window_name(event.window) == MAIN_DESKTOP_NAME:
-                                self.desktop_window.insert(0, event.window)
+                            # # if  self.desktop_window == []:
+                            # if self.get_window_name(event.window) == MAIN_DESKTOP_NAME:
+                                # self.desktop_window.insert(0, event.window)
+                            # elif self.get_window_cmd(event.window) == MAIN_DESKTOP_NAME:
+                                # self.desktop_window.insert(0, event.window)
+                            if MAIN_DESKTOP_NAME == self.get_window_name(event.window) or MAIN_DESKTOP_NAME == self.get_window_cmd(event.window):
+                                if event.window not in self.desktop_window:
+                                    self.desktop_window.insert(0, event.window)
+                                    if len(self.desktop_window) > 1:
+                                        for dd in self.desktop_window[1:]:
+                                            dd.configure(stack_mode=X.Above, sibling=self.desktop_window[0])
+                                else:
+                                    self.desktop_window.append(event.window)
                             else:
                                 self.desktop_window.append(event.window)
                             event.window.configure(x=0, y=0, width=screen_width, height=screen_height)
-                            # put at bottom of all
+                            # put at bottom of all but desktops
                             self.all_windows.insert(len(self.desktop_window), event.window)
                             self._update_client_list()
                             self.all_windows_stack.insert(len(self.desktop_window), event.window)
@@ -975,7 +956,7 @@ class x_wm:
                             # y = max(start_y, ngeom.y)
                             x = ngeom.x
                             y = ngeom.y
-                            event.window.configure(x=x, y=y)
+                            event.window.configure(x=x, y=y, stack_mode=X.Above)
                             self.display.sync()
                             event.window.map()
                         #
@@ -1035,8 +1016,10 @@ class x_wm:
                         x = int((screen_width_usable-win_geom.width)/2)
                         y = int((screen_height_usable-win_geom.height)/2)
                 #
-                # the window name
+                # the window command name
                 win_name = self.get_window_cmd(event.window)
+                # the window name
+                win_named = self.get_window_name(event.window)
                 #
                 if APP_SPECIAL_POSITION == []:
                     event.window.configure(x=x, y=y)
@@ -1092,13 +1075,10 @@ class x_wm:
                             skip_decoration = 1
                 #
                 skip_deco = 99
-                # the window name in APP_SPECIAL_DECO or "*"
-                win_named = None
                 #
                 if NO_DECO == 0 and APP_SPECIAL_DECO != []:
                     for el in APP_SPECIAL_DECO:
-                        if el[0] == win_name or el[0] == "*":
-                            win_named = el[0]
+                        if el[0] == win_name or el[0] == win_named or el[0] == "*":
                             # no decoration
                             if el[1] == "decoration-1" and el[0] != "*":
                                 skip_deco = 1
@@ -1226,12 +1206,21 @@ class x_wm:
                 #
                 if SLOPPY_FOCUS:
                     if event.window in self.DECO_WIN:
-                        event.window.set_input_focus(X.RevertToPointerRoot, X.CurrentTime)
-                    else:
-                        for iitem in self.transient_windows:
-                            if self.transient_windows[iitem] == event.window:
-                                event.window.set_input_focus(X.RevertToParent, 0)
-                                break
+                        # event.window.set_input_focus(X.RevertToPointerRoot, X.CurrentTime)
+                        ew_type_tmp = self.get_window_type(event.window)
+                        if ew_type_tmp != 1:
+                            # if self.display.intern_atom("_NET_WM_WINDOW_TYPE_DIALOG") in ew_type_tmp:
+                                # event.window.set_input_focus(X.RevertToParent, 0)
+                            # elif self.display.intern_atom("_NET_WM_WINDOW_TYPE_UTILITY") in ew_type_tmp:
+                                # event.window.set_input_focus(X.RevertToParent, 0)
+                            # el
+                            if ew_type_tmp[0] == self.display.intern_atom("_NET_WM_WINDOW_TYPE_NORMAL"):
+                                event.window.set_input_focus(X.RevertToPointerRoot, X.CurrentTime)
+                    # else:
+                        # for iitem in self.transient_windows:
+                            # if self.transient_windows[iitem] == event.window:
+                                # event.window.set_input_focus(X.RevertToParent, 0)
+                                # break
             #
             elif event.type == self.display.extension_event.ScreenChangeNotify:
                 screen_width = event.width_in_pixels
@@ -1358,8 +1347,6 @@ class x_wm:
                         # del self.windows_below[win]
                     # elif win in self.windows_above:
                         # del self.windows_above[win]
-                #
-                #
             #
             elif event.type == X.MotionNotify:
                 if event.window == self.root:
@@ -1537,7 +1524,7 @@ class x_wm:
                     #
                     if not self.delta_drag_start_point:
                         continue
-                    # do not go outside the top border
+                    # do not go outside the top or right border
                     if self.mouse_button_left == 1:
                         #
                         if USE_WIN:
@@ -1550,7 +1537,7 @@ class x_wm:
                                 ggeom = ddeco.get_geometry()
                             else:
                                 ggeom = wwin.get_geometry()
-                            #
+                            # top
                             if y <= self.delta_drag_start_point[1]+4+start_y:
                                 #
                                 if ddeco and wwin:
@@ -1560,6 +1547,7 @@ class x_wm:
                                     wwin.configure(x=x - self.delta_drag_start_point[0], y=start_y)
                                 #
                                 continue
+                            # right
                             elif end_x-4 < x+ggeom.width-self.delta_drag_start_point[0]:
                                 if ddeco and wwin:
                                     x = end_x-ggeom.width-BORDER_WIDTH2*2
@@ -2698,9 +2686,9 @@ class x_wm:
                     if self.DECO_WIN[self.active_window]:
                         self.DECO_WIN[self.active_window].change_attributes(border_pixel=border_color2)
                         # self.display.sync()
-                        self.DECO_WIN[self.active_window].grab_button(1, X.AnyModifier, True,
-                                    X.ButtonPressMask|X.ButtonReleaseMask|X.EnterWindowMask, X.GrabModeAsync,
-                                    X.GrabModeAsync, X.NONE, X.NONE)
+                        # self.DECO_WIN[self.active_window].grab_button(1, X.AnyModifier, True,
+                                    # X.ButtonPressMask|X.ButtonReleaseMask|X.EnterWindowMask, X.GrabModeAsync,
+                                    # X.GrabModeAsync, X.NONE, X.NONE)
                         self.display.sync()
                     else:
                         self.active_window.change_attributes(border_pixel=border_color2)
@@ -2798,9 +2786,9 @@ class x_wm:
                 if self.DECO_WIN[self.active_window]:
                     self.DECO_WIN[self.active_window].change_attributes(border_pixel=border_color2)
                     self.display.sync()
-                    self.DECO_WIN[self.active_window].grab_button(1, X.AnyModifier, True,
-                                X.ButtonPressMask|X.ButtonReleaseMask|X.EnterWindowMask, X.GrabModeAsync,
-                                X.GrabModeAsync, X.NONE, X.NONE)
+                    # self.DECO_WIN[self.active_window].grab_button(1, X.AnyModifier, True,
+                                # X.ButtonPressMask|X.ButtonReleaseMask|X.EnterWindowMask, X.GrabModeAsync,
+                                # X.GrabModeAsync, X.NONE, X.NONE)
                 else:
                     self.active_window.change_attributes(border_pixel=border_color2)
                 #
@@ -2849,7 +2837,7 @@ class x_wm:
                         self.active_window = iitem
                         #
                         if self.DECO_WIN[iitem]:
-                            self.DECO_WIN[iitem].ungrab_button(1, X.AnyModifier)
+                            # self.DECO_WIN[iitem].ungrab_button(1, X.AnyModifier)
                             # unmap to avoid something from deco
                             self.DECO_WIN[iitem].unmap()
                             self.DECO_WIN[iitem].raise_window()
@@ -3126,7 +3114,7 @@ class x_wm:
             cmd, cls = window.get_wm_class()
         except:
             return "X"
-        if cls is not None:
+        if cmd is not None:
             return cmd
         else:
             return "X"
