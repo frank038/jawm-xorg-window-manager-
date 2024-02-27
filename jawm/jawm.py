@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# v. 20240224
+# v. 20240226
 
 ##############
 ##### OPTIONS
@@ -20,7 +20,7 @@ DECO_BORDER_COLOR2 = "#008000"
 NO_DECO = 0
 
 # decoration color: buttons need to be recolored if changed
-DECO_COLOR = "#D2AE26"
+DECO_COLOR = "#F7630C"
 
 # the main desktop name (name from wmclass first value or window name)
 MAIN_DESKTOP_NAME = "qt5desktop-1"
@@ -316,7 +316,11 @@ class x_wm:
             # Super_L 
             self.root.grab_key(self.display.keysym_to_keycode(XK.string_to_keysym(_STATE)),
                 X.AnyModifier, 1, X.GrabModeAsync, X.GrabModeAsync)
-        
+
+            # 'XF86AudioLowerVolume' 'XF86AudioRaiseVolume'
+            # self.root.grab_key(self.display.keysym_to_keycode("XF86AudioLowerVolume"),
+                # X.NONE, 1, X.GrabModeAsync, X.GrabModeAsync)
+            
             # terminal
             # if _TERMINAL:
                 # keycode = self.display.keysym_to_keycode(XK.string_to_keysym(_TERMINAL))
@@ -361,14 +365,16 @@ class x_wm:
         self.desktop_window = []
         # windows that are dock type: window - x y t b
         self.dock_windows = {}
+        # notification windows
+        self.notification_windows = []
         # window with transient window: window:transient
         self.transient_windows = {}
         # windows belonging to window leader: window:[list of window with window_group hint (except transient)]
         self.windows_group = {}
         # # window in above state: window:decoration
         # self.windows_above = {}
-        # # window in below state: window:decoration
-        # self.windows_below = {}
+        # window in below state: window:decoration
+        self.windows_below = {}
         # only one can be in this state
         self.window_in_fullscreen_state = []
         #
@@ -422,7 +428,7 @@ class x_wm:
         if NO_DECO == 0:
             self.deco_btn_width = 0
             self.deco_btn_height = 0
-            # self.on_deco_btn()
+            self.on_deco_btn()
         if _DRAW_TITLE:
             self.title_size = None
         #
@@ -501,8 +507,8 @@ class x_wm:
         #
         if _DRAW_TITLE:
             self._on_title2(deco, win)
-        if NO_DECO == 0:
-            self.on_deco_btn()
+        # if NO_DECO == 0:
+            # self.on_deco_btn()
         # wret = 0
         # def werror(err, ww):
             # wret = -1
@@ -656,7 +662,7 @@ class x_wm:
                     #
                     if not win:
                         continue
-                # skip if already present
+                # skip if already managed
                 if event.window in self.all_windows:
                     continue
                 if event.window in self.all_windows_stack:
@@ -679,8 +685,15 @@ class x_wm:
                 # check if this window is a transient one
                 w_is_transient = event.window.get_full_property(self.WM_TRANSIENT, X.AnyPropertyType)
                 if w_is_transient:
-                    event.window.set_input_focus(X.RevertToParent, 0)
-                    continue
+                    _is_found = 0
+                    for ee in self.DECO_WIN:
+                        # pavucontrol-qt is a transient of what window? I hope this dont break anything else.
+                        if ee.id == w_is_transient.value[0]:
+                            _is_found = 1
+                            break
+                    if _is_found == 1:
+                        event.window.set_input_focus(X.RevertToParent, 0)
+                        continue
                 #
                 # window inside the decoration or window (without decoration)
                 if event.window in self.DECO_WIN:
@@ -783,24 +796,25 @@ class x_wm:
                     continue
                 ##########
                 # _is_above = 0
-                # _is_below = 0
+                _is_below = 0
                 _is_modal = 0
                 mprop = event.window.get_full_property(self.NET_WM_STATE, X.AnyPropertyType)#, sizehint = 10000)
                 if mprop:
                     mvalue = mprop.value[0]
                     # if self.NET_STATE_ABOVE == mvalue:
                         # _is_above = 1
-                    # elif self.NET_STATE_BELOW == mvalue:
-                        # _is_below = 1
+                    # el
+                    if self.NET_STATE_BELOW == mvalue:
+                        _is_below = 1
                     if self.NET_STATE_MODAL == mvalue:
                         _is_modal = 1
-                # delete this property - cannot be managed
-                if _is_modal:
-                    event.window.delete_property(
-                        self.NET_WM_STATE,
-                        )
-                    self.display.sync()
-                    _is_modal = 0
+                # # delete this property - cannot be managed
+                # if _is_modal:
+                    # event.window.delete_property(
+                        # self.NET_WM_STATE,
+                        # )
+                    # self.display.sync()
+                    # _is_modal = 0
                 #
                 ##########
                 # check if this window is a transient one
@@ -823,11 +837,11 @@ class x_wm:
                             self.transient_windows[win] = event.window
                             _is_transient = win
                             break
-                    # remove transient property
-                    if _is_transient == None:
-                        event.window.delete_property(
-                            self.WM_TRANSIENT,
-                            )
+                    # # remove transient property
+                    # if _is_transient == None:
+                        # event.window.delete_property(
+                            # self.WM_TRANSIENT,
+                            # )
                 #
                 attrs = event.window.get_attributes()
                 if attrs is None:
@@ -959,6 +973,8 @@ class x_wm:
                             event.window.configure(x=x, y=y, stack_mode=X.Above)
                             self.display.sync()
                             event.window.map()
+                            #
+                            self.notification_windows.append(event.window)
                         #
                         elif ew_type[0] == '_NET_WM_WINDOW_TYPE_SPLASH':
                             win_geom = event.window.get_geometry()
@@ -1125,8 +1141,8 @@ class x_wm:
                     event.window.map()
                     event.window.raise_window()
                     #
-                    # if _is_below:
-                        # self.windows_below[event.window] = None
+                    if _is_below:
+                        self.windows_below[event.window] = None
                     # elif _is_above:
                         # self.windows_above[event.window] = None
                     ##########
@@ -1161,8 +1177,8 @@ class x_wm:
                 mask = X.EnterWindowMask
                 event.window.change_attributes(event_mask=mask)
                 #
-                # if _is_below:
-                    # self.windows_below[event.window] = deco
+                if _is_below:
+                    self.windows_below[event.window] = deco
                 # elif _is_above:
                     # self.windows_above[event.window] = deco
                 #
@@ -1199,6 +1215,8 @@ class x_wm:
             elif event.type == X.EnterNotify:
                 if event.window == None:
                     continue
+                # if event.window == self.active_window:
+                    # continue
                 # if event.window == self.root:
                     # self.entered_window = None
                 # #
@@ -1209,18 +1227,17 @@ class x_wm:
                         # event.window.set_input_focus(X.RevertToPointerRoot, X.CurrentTime)
                         ew_type_tmp = self.get_window_type(event.window)
                         if ew_type_tmp != 1:
-                            # if self.display.intern_atom("_NET_WM_WINDOW_TYPE_DIALOG") in ew_type_tmp:
-                                # event.window.set_input_focus(X.RevertToParent, 0)
-                            # elif self.display.intern_atom("_NET_WM_WINDOW_TYPE_UTILITY") in ew_type_tmp:
-                                # event.window.set_input_focus(X.RevertToParent, 0)
-                            # el
-                            if ew_type_tmp[0] == self.display.intern_atom("_NET_WM_WINDOW_TYPE_NORMAL"):
+                            if self.display.intern_atom("_NET_WM_WINDOW_TYPE_DIALOG") in ew_type_tmp:
+                                event.window.set_input_focus(X.RevertToParent, 0)
+                            elif self.display.intern_atom("_NET_WM_WINDOW_TYPE_UTILITY") in ew_type_tmp:
+                                event.window.set_input_focus(X.RevertToParent, 0)
+                            elif ew_type_tmp[0] == self.display.intern_atom("_NET_WM_WINDOW_TYPE_NORMAL"):
                                 event.window.set_input_focus(X.RevertToPointerRoot, X.CurrentTime)
-                    # else:
-                        # for iitem in self.transient_windows:
-                            # if self.transient_windows[iitem] == event.window:
-                                # event.window.set_input_focus(X.RevertToParent, 0)
-                                # break
+                    else:
+                        for iitem in self.transient_windows:
+                            if self.transient_windows[iitem] == event.window:
+                                event.window.set_input_focus(X.RevertToParent, 0)
+                                break
             #
             elif event.type == self.display.extension_event.ScreenChangeNotify:
                 screen_width = event.width_in_pixels
@@ -1233,6 +1250,9 @@ class x_wm:
             elif event.type == X.UnmapNotify:
                 if event.window == X.NONE or event.window == self.root:
                     continue
+                # notifications
+                if event.window in self.notification_windows:
+                    self.notification_windows.remove(event.window)
                 # decoration
                 if event.window in self.DECO_WIN:
                     if self.DECO_WIN[event.window]:
@@ -1284,16 +1304,15 @@ class x_wm:
                     self._update_client_list_stack()
                     continue
                 #
-                if event.window == X.NONE or event.window == None or event.window == self.root:
-                    continue
-                #
                 # it is a transient window
                 w_is_transient = None
                 for wwin in self.transient_windows:
                     if self.transient_windows[wwin] == event.window:
-                        wwin.set_input_focus(X.RevertToPointerRoot, X.CurrentTime)
-                        wwin.raise_window()
-                        self.display.sync()
+                        # if wwin in self.root.query_tree().children:
+                        if wwin == self.active_window:
+                            wwin.set_input_focus(X.RevertToPointerRoot, X.CurrentTime)
+                            wwin.raise_window()
+                            self.display.sync()
                         #
                         del self.transient_windows[wwin]
                         w_is_transient = 1
@@ -1307,26 +1326,21 @@ class x_wm:
                 # the window
                 if event.window in self.DECO_WIN:
                     win = event.window
-                    deco2 = self.find_win_of_deco(event.window)
-                    # the decoration
-                    if deco2:
-                        deco = deco2
+                    deco = self.find_win_of_deco(event.window)
                 # the decoration
                 else:
-                    win2 = self.find_win_of_deco(event.window)
-                    if win2:
-                        win = win2
+                    win = self.find_win_of_deco(event.window)
+                    if win:
                         deco = event.window
                 #
                 if win:
                     # with decoration
                     if win in self.DECO_WIN:
                         if self.DECO_WIN[win]:
+                            self.DECO_WIN[win].unmap()
                             self.DECO_WIN[win].destroy()
-                            del self.DECO_WIN[win]
-                        # without decoration
-                        else:
-                            del self.DECO_WIN[win]
+                        #
+                        del self.DECO_WIN[win]
                     #
                     if win in self.all_windows:
                         self.all_windows.remove(win)
@@ -1340,11 +1354,11 @@ class x_wm:
                         self.window_in_fullscreen_state = []
                     if win in self.window_in_fullscreen_state_CM:
                         self.window_in_fullscreen_state_CM = []
-                    #
+                    # in unmapnotify
                     # self._find_and_update_the_active(win)
                     #
-                    # if win in self.windows_below:
-                        # del self.windows_below[win]
+                    if win in self.windows_below:
+                        del self.windows_below[win]
                     # elif win in self.windows_above:
                         # del self.windows_above[win]
             #
@@ -1568,6 +1582,11 @@ class x_wm:
                     continue
             #
             elif event.type == X.KeyPress:
+                if event.detail == 122:
+                    try:
+                        os.system("xterm &")
+                    except:
+                        pass
                 # on root
                 if event.child == None:
                     continue
@@ -2281,8 +2300,9 @@ class x_wm:
                     # Depending on the information provided with the message, 
                     # the Window Manager may decide to refuse the request 
                     # (either completely ignore it, or e.g. use _NET_WM_STATE_DEMANDS_ATTENTION).
-                    if fmt == 32 and data[0] in [1,2,0]:
+                    #
                     # if fmt == 32 and data[0] in [1,2]:
+                    if fmt == 32 and data[0] in [1,2,0]:
                         win = None
                         dwin = None
                         if event.window in self.DECO_WIN:
@@ -2459,11 +2479,17 @@ class x_wm:
                     self.display.sync()
                     #
                     # if event.window in self.windows_below:
-                        # deco = self.windows_below[event.window]
-                        # self.windows_below[event.window] = deco
+                        # del self.windows_below[event.window]
                     # elif event.window in self.windows_above:
-                        # deco = self.windows_above[event.window]
+                        # del self.windows_above[event.window]
+                    #
+                    # deco = None
+                    # if event.window in self.DECO_WIN:
+                        # deco = self.DECO_WIN[event.window]
+                    # if event.stack_mode == X.Above:
                         # self.windows_above[event.window] = deco
+                    # elif event.stack_mode == X.Below:
+                        # self.windows_below[event.window] = deco
                 # 
                 continue
             #
@@ -2673,6 +2699,21 @@ class x_wm:
             self.display.send_event(win, sevent)
             self.display.sync()
     
+    # # activate the window by request - win deco type
+    # def _activate_window2(self, window, dwin, _type):
+        # wm_state = self.NET_WM_STATE
+        # _atm = self.NET_ACTIVE_WINDOW
+        # # _data = [1, X.CurrentTime,window.id,0,0]
+        # _data = [0,0,0,0,0]
+        # sevent = protocol.event.ClientMessage(
+        # window = window,
+        # client_type = _atm,
+        # data=(32, (_data))
+        # )
+        # mask = (X.SubstructureRedirectMask | X.SubstructureNotifyMask)
+        # self.root.send_event(event=sevent, event_mask=mask)
+        # self.display.flush()
+        # self.display.sync()
     
     # activate the window by request - win deco type
     def _activate_window(self, win, dwin, _type):
@@ -2774,7 +2815,13 @@ class x_wm:
                 self.display.flush()
             #
             self._update_active_window(self.active_window)
-
+            #
+            # notifications
+            try:
+                for nwin in self.notification_windows:
+                    nwin.configure(stack_mode=X.Above)
+            except:
+                pass
     
     # find a window to set as active
     # after destroy and mini/maximize
@@ -2782,7 +2829,7 @@ class x_wm:
         # the active window closed or minimized
         if win == self.active_window:
             #
-            if self.active_window in self.DECO_WIN:
+            if self.active_window in self.DECO_WIN and win in self.root.query_tree().children:
                 if self.DECO_WIN[self.active_window]:
                     self.DECO_WIN[self.active_window].change_attributes(border_pixel=border_color2)
                     self.display.sync()
