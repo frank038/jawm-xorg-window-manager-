@@ -37,7 +37,7 @@ Limitations:
 - no text nor icon in the titlebar;
 - other missing features.
 
-Development release, almost finished, and usable. Tint2 can be used with this wm.
+Development release, usable for testing. Tint2 can be used with this wm.
 
 Known issues:
 - firefox: fullscreen mode doesn't work properly (I have no idea)
